@@ -890,9 +890,12 @@ export default function FinancialPage() {
           const avgZone     = territoryZoneVizData.length ? totalViz / territoryZoneVizData.length : 0;
 
           // Custom pie label renderer
-          const renderPieLabel = ({ cx, cy, midAngle, innerRadius, outerRadius, percent, name }: {
-            cx: number; cy: number; midAngle: number; innerRadius: number; outerRadius: number; percent: number; name: string;
-          }) => {
+          const renderPieLabel = ({
+            cx = 0, cy = 0, midAngle = 0, innerRadius = 0, outerRadius = 0, percent = 0,
+          }: {
+            cx?: number; cy?: number; midAngle?: number;
+            innerRadius?: number; outerRadius?: number; percent?: number; name?: string;
+          }): React.ReactElement | null => {
             if (percent < 0.05) return null;
             const RADIAN = Math.PI / 180;
             const r = innerRadius + (outerRadius - innerRadius) * 0.55;
