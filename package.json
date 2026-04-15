@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "build:cf": "next build && opennextjs-cloudflare build",
+    "build:cf": "next build && opennextjs-cloudflare build --dangerouslyUseUnsupportedNextVersion",
     "deploy": "npm run build:cf && wrangler deploy",
     "preview": "npm run build:cf && wrangler dev"
   },

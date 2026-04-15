@@ -278,7 +278,7 @@ export function ROIGauge({ value, min = -100, max = 200 }: ROIGaugeProps) {
         <text
           x={CX} y={CY - 44}
           textAnchor="middle" dominantBaseline="auto"
-          fill={liveColor}
+          fill="#FFFFFF"
           fontSize="36" fontWeight="800"
           fontFamily="Inter, system-ui, sans-serif"
           letterSpacing="-1"

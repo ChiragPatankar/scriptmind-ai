@@ -50,6 +50,17 @@ const COLORS = {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
+function Tag({ label, color }: { label: string; color: string }) {
+  return (
+    <span
+      className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wide"
+      style={{ background: `${color}18`, color, border: `1px solid ${color}30` }}
+    >
+      {label}
+    </span>
+  );
+}
+
 /** Animated number counter that transitions between values */
 function AnimatedNumber({ value, format = fmt }: { value: number; format?: (n: number) => string }) {
   const [display, setDisplay] = useState(value);
@@ -254,6 +265,9 @@ const DEFAULT_INPUT: ProjectionInput = {
   releaseTiming: "normal",
   scriptScore:   65,
   audience:      "mass",
+  historicalBoost: 0,
+  exceptionalMovie: false,
+  benchmarkMatch: 0,
 };
 
 // ── Main Panel ─────────────────────────────────────────────────────────────────
@@ -280,9 +294,10 @@ export function ProjectionPanel({
     budget:      budgetSeed      ?? DEFAULT_INPUT.budget,
     scriptScore: scriptScoreSeed ?? DEFAULT_INPUT.scriptScore,
   });
-  const [result, setResult]     = useState<ProjectionResult | null>(null);
-  const [loading, setLoading]   = useState(false);
-  const [showBreakdown, setShowBreakdown] = useState(false);
+  const [result, setResult]         = useState<ProjectionResult | null>(null);
+  const [loading, setLoading]       = useState(false);
+  const [showBreakdown, setShowBreakdown]     = useState(false);
+  const [showExplanation, setShowExplanation] = useState(false);
   const debounceRef             = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync budget seed if parent changes it
@@ -334,6 +349,9 @@ export function ProjectionPanel({
         { label: "Release Timing",  multiplier: result.breakdown.releaseTiming,  weight: 0.10, icon: Calendar,  color: COLORS.purple },
         { label: "Script Quality",  multiplier: result.breakdown.scriptScore,    weight: 0.20, icon: Sparkles,  color: COLORS.green  },
         { label: "Audience Type",   multiplier: result.breakdown.audience,       weight: 0.10, icon: Users,     color: COLORS.red    },
+        { label: "Historical comps",multiplier: result.breakdown.historical,     weight: 0.08, icon: BarChart2, color: COLORS.cyan   },
+        { label: "Benchmark match", multiplier: result.breakdown.benchmark,      weight: 0.07, icon: Target,    color: COLORS.gold   },
+        { label: "Exceptional flag",multiplier: result.breakdown.exceptional,    weight: 0.05, icon: Rocket,    color: COLORS.purple },
       ]
     : [];
 
@@ -562,6 +580,44 @@ export function ProjectionPanel({
               <span style={{ color: COLORS.green }}>Strong (&gt;70) ×1.8</span>
             </div>
           </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                Historical data influence
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={input.historicalBoost}
+                onChange={(e) => set("historicalBoost", Number(e.target.value))}
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
+                Benchmark match
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={input.benchmarkMatch}
+                onChange={(e) => set("benchmarkMatch", Number(e.target.value))}
+              />
+            </div>
+          </div>
+
+          <label className="flex items-center gap-2 text-xs text-text-secondary font-semibold">
+            <input
+              type="checkbox"
+              checked={input.exceptionalMovie}
+              onChange={(e) => set("exceptionalMovie", e.target.checked)}
+            />
+            Exceptional movie boost
+          </label>
         </div>
 
         {/* ── Results panel ── */}
@@ -662,6 +718,112 @@ export function ProjectionPanel({
           )}
         </AnimatePresence>
       </div>
+
+      {/* ── "Why this projection?" Explanation ── */}
+      {result && result.explanation.length > 0 && (
+        <div className="rounded-2xl overflow-hidden"
+          style={{ border: "1px solid rgba(var(--border-rgb,100,100,120),0.35)" }}>
+          <button
+            onClick={() => setShowExplanation((v) => !v)}
+            className="w-full flex items-center justify-between px-5 py-4 hover:bg-white/[0.02] transition-colors"
+          >
+            <div className="flex items-center gap-2 text-sm font-bold text-text-secondary">
+              <Sparkles className="w-4 h-4" style={{ color: COLORS.gold }} />
+              Why this projection?
+            </div>
+            <motion.div animate={{ rotate: showExplanation ? 180 : 0 }} transition={{ duration: 0.2 }}>
+              <ChevronDown className="w-4 h-4 text-text-muted" />
+            </motion.div>
+          </button>
+          <AnimatePresence>
+            {showExplanation && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <div className="px-5 pb-5 space-y-2">
+                  <div className="h-px mb-3" style={{ background: "rgba(var(--border-rgb,100,100,120),0.3)" }} />
+                  {result.explanation.map((line, i) => (
+                    <div key={i} className="flex items-start gap-2.5 text-xs text-text-muted leading-relaxed">
+                      <span className="mt-1 w-1.5 h-1.5 rounded-full shrink-0"
+                        style={{ background: COLORS.gold, opacity: 0.8 }} />
+                      {line}
+                    </div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      )}
+
+      {/* ── Similar Films (dataset matching) ── */}
+      {result && result.similarFilms.length > 0 && (
+        <div className="rounded-2xl overflow-hidden"
+          style={{ border: "1px solid rgba(var(--border-rgb,100,100,120),0.35)" }}>
+          <div className="px-5 py-3 flex items-center gap-2"
+            style={{ background: "rgba(var(--surface-rgb,30,30,50),0.6)" }}>
+            <Film className="w-4 h-4 text-accent" />
+            <span className="text-sm font-bold text-text-secondary">Similar Films  ·  Weighted Dataset</span>
+            <span className="ml-auto text-[10px] text-text-muted">
+              Weighted avg: <strong style={{ color: COLORS.cyan }}>{result.datasetMult.toFixed(2)}×</strong>
+              &nbsp;|&nbsp; Model base: <strong style={{ color: COLORS.purple }}>{result.baseWeightedMult.toFixed(2)}×</strong>
+            </span>
+          </div>
+          <div className="px-5 pb-4 pt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {result.similarFilms.map((sf) => {
+              const f = sf.film;
+              return (
+                <div key={f.id}
+                  className="rounded-xl p-3 border bg-surface-2 space-y-1.5 transition-all"
+                  style={{
+                    borderColor: sf.closest ? `${COLORS.gold}60` : "rgba(var(--border-rgb,100,100,120),0.4)",
+                    background:  sf.closest ? `rgba(245,158,11,0.06)` : undefined,
+                  }}>
+                  <div className="flex items-center justify-between gap-1">
+                    <div className="text-xs font-bold text-text-primary truncate">{f.title}</div>
+                    {sf.closest && (
+                      <span className="shrink-0 text-[9px] font-black px-1.5 py-0.5 rounded-full"
+                        style={{ background: `${COLORS.gold}20`, color: COLORS.gold, border:`1px solid ${COLORS.gold}35` }}>
+                        Closest
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Tag label={f.genre}    color={COLORS.blue}   />
+                    <Tag label={f.star}     color={COLORS.gold}   />
+                    <Tag label={f.audience} color={COLORS.purple} />
+                  </div>
+                  <div className="flex justify-between text-[11px] pt-1 border-t border-border/30">
+                    <span className="text-text-muted">₹{f.budget} Cr</span>
+                    <span className="text-text-muted">→ ₹{f.collections} Cr</span>
+                    <span className="font-bold" style={{ color: COLORS.green }}>{f.multiplier.toFixed(2)}×</span>
+                  </div>
+                  {/* Similarity bar */}
+                  <div className="space-y-0.5">
+                    <div className="flex justify-between text-[9px]">
+                      <span className="text-text-muted">Similarity</span>
+                      <span className="font-bold" style={{ color: sf.pct >= 70 ? COLORS.green : sf.pct >= 40 ? COLORS.gold : COLORS.red }}>
+                        {sf.pct}%
+                      </span>
+                    </div>
+                    <div className="h-1.5 rounded-full bg-surface-3 overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-500"
+                        style={{
+                          width: `${sf.pct}%`,
+                          background: sf.pct >= 70 ? COLORS.green : sf.pct >= 40 ? COLORS.gold : COLORS.red,
+                        }} />
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Disclaimer ── */}
       <div className="flex items-start gap-2 rounded-xl px-4 py-3"

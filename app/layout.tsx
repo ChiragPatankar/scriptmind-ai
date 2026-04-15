@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
+import { MotionProvider } from "@/components/providers/MotionProvider";
 
 export const metadata: Metadata = {
   title: {
@@ -49,7 +50,9 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider>
-          <QueryProvider>{children}</QueryProvider>
+          <MotionProvider>
+            <QueryProvider>{children}</QueryProvider>
+          </MotionProvider>
         </ThemeProvider>
       </body>
     </html>

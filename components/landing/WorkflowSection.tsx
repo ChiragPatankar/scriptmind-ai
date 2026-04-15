@@ -1,8 +1,7 @@
 "use client";
 
-import React from "react";
+import React, { Fragment, useRef } from "react";
 import { motion, useInView } from "framer-motion";
-import { useRef } from "react";
 import { Lightbulb, PenLine, MessageSquare, DollarSign, BarChart3, Rocket } from "lucide-react";
 
 const steps = [
@@ -58,37 +57,46 @@ export default function WorkflowSection() {
           </p>
         </motion.div>
 
-        {/* Desktop: horizontal steps */}
-        <div className="hidden lg:block relative">
-          {/* Connecting line */}
-          <div className="absolute top-[38px] left-[9%] right-[9%] h-px" style={{ background: "rgba(255,255,255,0.07)" }} />
-          <motion.div
-            className="absolute top-[38px] left-[9%] h-px origin-left"
-            style={{ background: "linear-gradient(90deg, #7C3AED, #A78BFA, #3B82F6, #F59E0B, #EC4899, #22C55E)", right: "9%" }}
-            initial={{ scaleX: 0 }}
-            animate={{ scaleX: inView ? 1 : 0 }}
-            transition={{ duration: 1.4, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          />
-
-          {/* Steps */}
-          <div className="grid grid-cols-6 gap-4">
-            {steps.map((step, i) => (
+        {/* Desktop: horizontal steps — connectors only in gaps (no line under icons) */}
+        <div className="hidden lg:flex w-full items-start justify-center">
+          {steps.map((step, i) => (
+            <Fragment key={step.label}>
+              {i > 0 && (
+                <div className="flex-1 min-w-[8px] max-w-[140px] h-[76px] flex items-center self-start px-1">
+                  <div className="relative w-full h-px rounded-full overflow-hidden">
+                    <div
+                      className="absolute inset-0 h-px rounded-full"
+                      style={{ background: "rgba(255,255,255,0.08)" }}
+                    />
+                    <motion.div
+                      className="absolute inset-0 h-px rounded-full origin-left"
+                      style={{
+                        background: `linear-gradient(90deg, ${steps[i - 1].color}, ${step.color})`,
+                      }}
+                      initial={{ scaleX: 0 }}
+                      animate={{ scaleX: inView ? 1 : 0 }}
+                      transition={{
+                        duration: 0.65,
+                        delay: 0.15 + i * 0.1,
+                        ease: [0.22, 1, 0.36, 1],
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
               <motion.div
-                key={step.label}
                 initial={{ opacity: 0, y: 30 }}
                 animate={inView ? { opacity: 1, y: 0 } : {}}
                 transition={{ delay: 0.2 + i * 0.12, duration: 0.55, ease: "easeOut" }}
-                className="flex flex-col items-center text-center group"
+                className="flex flex-col items-center text-center group w-[76px] shrink-0"
               >
-                {/* Icon circle */}
                 <motion.div
                   whileHover={{ scale: 1.12, boxShadow: `0 0 24px ${step.color}60` }}
                   transition={{ duration: 0.2 }}
-                  className="w-[76px] h-[76px] rounded-2xl flex items-center justify-center mb-5 relative z-10 cursor-default"
+                  className="w-[76px] h-[76px] rounded-2xl flex items-center justify-center mb-5 relative cursor-default"
                   style={{ background: step.bg, border: `1px solid ${step.border}` }}
                 >
                   <step.icon className="w-7 h-7" style={{ color: step.color }} />
-                  {/* Step number */}
                   <span className="absolute -top-2 -right-2 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-black"
                     style={{ background: step.color, color: "#0B0B0F" }}>
                     {i + 1}
@@ -98,8 +106,8 @@ export default function WorkflowSection() {
                 <h3 className="text-sm font-bold text-text-primary mb-1">{step.label}</h3>
                 <p className="text-[11px] text-text-muted leading-relaxed">{step.desc}</p>
               </motion.div>
-            ))}
-          </div>
+            </Fragment>
+          ))}
         </div>
 
         {/* Mobile: vertical steps */}
