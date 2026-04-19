@@ -341,10 +341,12 @@ export default apiClient;
 
 // ── Financial Model API (placeholder — connect to backend later) ──────────────
 
-import type { BudgetInputs, BreakdownConfig, RevenueConfig, NPVConfig } from "./financial-store";
+import type { BudgetMatrix, BreakEvenMode, BreakdownConfig, RevenueConfig, NPVConfig } from "./financial-store";
 
 export interface FinancialModelPayload {
-  budget: BudgetInputs;
+  budgetMatrix: BudgetMatrix;
+  breakEvenMode: BreakEvenMode;
+  breakEvenManual: number;
   breakdown: BreakdownConfig;
   revenue: RevenueConfig;
   npvConfig: NPVConfig;

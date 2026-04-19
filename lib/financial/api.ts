@@ -1,7 +1,16 @@
-import type { BudgetInputs, RevenueConfig, NPVConfig, TerritoryConfig, ProjectionsConfig } from "@/lib/financial-store";
+import type {
+  BudgetMatrix,
+  BreakEvenMode,
+  RevenueConfig,
+  NPVConfig,
+  TerritoryConfig,
+  ProjectionsConfig,
+} from "@/lib/financial-store";
 
 export interface FinancialPayload {
-  budget: BudgetInputs;
+  budgetMatrix: BudgetMatrix;
+  breakEvenMode: BreakEvenMode;
+  breakEvenManual: number;
   revenue: RevenueConfig;
   npvConfig: NPVConfig;
   territory: TerritoryConfig;

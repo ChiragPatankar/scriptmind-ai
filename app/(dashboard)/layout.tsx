@@ -20,14 +20,12 @@ export default function DashboardLayout({
       <main
         className={cn(
           "min-h-screen pt-16 transition-all duration-300",
-          // Mobile: no sidebar padding (sidebar slides off-screen)
-          // Desktop: match sidebar width
           "pl-0",
           "md:pl-[68px]",
           !sidebarCollapsed && "md:pl-[240px]"
         )}
       >
-        <div className="p-4 sm:p-6 lg:p-8 max-w-[1400px]">{children}</div>
+        <div className="mx-auto max-w-[1400px] p-4 pb-12 sm:p-6 sm:pb-14 lg:p-8 lg:pb-16">{children}</div>
       </main>
     </div>
   );

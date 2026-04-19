@@ -2,31 +2,20 @@ import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 
 export type PhaseKey = "preProduction" | "production" | "postProduction" | "contingency";
+export type BudgetCategory = "marketing" | "actorBudget" | "foodUtilities" | "travel" | "misc";
 export type RevenueMode = "percent" | "amount";
 export type SplitKey = "exhibitor" | "distributor" | "investor" | "pa";
 export type ChartMode = "bar" | "line";
 export type PlatformType = "OTT" | "Satellite" | "Theatrical";
 
-const DEFAULT_PHASE_RATIO: Record<PhaseKey, number> = {
-  preProduction: 0.15,
-  production: 0.55,
-  postProduction: 0.2,
-  contingency: 0.1,
-};
-
 export type BreakEvenMode = "auto" | "manual";
 
-export interface BudgetInputs {
-  totalBudget: number;
-  phases: Record<PhaseKey, number>;
-  actorBudget: number;
-  marketingBudget: number;
-  travelBudget: number;
-  foodUtilitiesBudget: number;
-  miscBudget: number;
-  breakEvenMode: BreakEvenMode;
-  breakEvenManual: number;
+export interface MatrixCell {
+  budget: number;
+  actual: number;
 }
+
+export type BudgetMatrix = Record<PhaseKey, Record<BudgetCategory, MatrixCell>>;
 
 export interface BreakdownConfig {
   preProductionPct: number;
@@ -60,7 +49,6 @@ export interface TerritoryEntry {
 
 export interface TerritoryConfig {
   entries: TerritoryEntry[];
-  // legacy compatibility fields (used by InvestorReport)
   hindiDomesticPct: number;
   southIndiaPct: number;
   overseasPct: number;
@@ -78,7 +66,9 @@ export interface ProjectionsConfig {
 
 export interface FinancialMetrics {
   totalBudget: number;
+  totalActuals: number;
   totalInvestment: number;
+  totalMarketingBudget: number;
   preProduction: number;
   production: number;
   postProduction: number;
@@ -97,28 +87,86 @@ export interface FinancialMetrics {
   irr: number | null;
 }
 
-export const DEFAULT_BUDGET: BudgetInputs = {
-  totalBudget: 0,
-  phases: {
-    preProduction: 0,
-    production: 0,
-    postProduction: 0,
-    contingency: 0,
-  },
-  actorBudget: 0,
-  marketingBudget: 0,
-  travelBudget: 0,
-  foodUtilitiesBudget: 0,
-  miscBudget: 0,
-  breakEvenMode: "auto",
-  breakEvenManual: 0,
-};
-export const DEFAULT_BREAKDOWN: BreakdownConfig = {
-  preProductionPct: 0,
-  productionPct: 0,
-  postProductionPct: 0,
-  contingencyPct: 0,
-};
+export const PHASE_KEYS: PhaseKey[] = ["preProduction", "production", "postProduction", "contingency"];
+export const BUDGET_CATEGORIES: BudgetCategory[] = [
+  "marketing",
+  "actorBudget",
+  "foodUtilities",
+  "travel",
+  "misc",
+];
+
+/** Demo seed (₹ Cr) — valid splits; totals ~33 Cr budget for quick “Generate report” trials. */
+export function createDemoMatrix(): BudgetMatrix {
+  const b = (budget: number, actual: number): MatrixCell => ({
+    budget: Math.max(0, budget),
+    actual: Math.max(0, actual),
+  });
+  return {
+    preProduction: {
+      marketing: b(0.9, 0.75),
+      actorBudget: b(0.2, 0.15),
+      foodUtilities: b(0.35, 0.3),
+      travel: b(0.25, 0.22),
+      misc: b(0.2, 0.18),
+    },
+    production: {
+      marketing: b(1.4, 1.2),
+      actorBudget: b(12.5, 11.8),
+      foodUtilities: b(1.6, 1.45),
+      travel: b(2.2, 2.0),
+      misc: b(1.1, 0.95),
+    },
+    postProduction: {
+      marketing: b(8.2, 7.4),
+      actorBudget: b(0.6, 0.55),
+      foodUtilities: b(0.85, 0.8),
+      travel: b(0.55, 0.5),
+      misc: b(2.1, 1.9),
+    },
+    contingency: {
+      marketing: b(0.4, 0.1),
+      actorBudget: b(0.35, 0.1),
+      foodUtilities: b(0.45, 0.12),
+      travel: b(0.35, 0.1),
+      misc: b(0.65, 0.15),
+    },
+  };
+}
+
+export function createEmptyMatrix(): BudgetMatrix {
+  const cell = (): MatrixCell => ({ budget: 0, actual: 0 });
+  return {
+    preProduction: {
+      marketing: cell(),
+      actorBudget: cell(),
+      foodUtilities: cell(),
+      travel: cell(),
+      misc: cell(),
+    },
+    production: {
+      marketing: cell(),
+      actorBudget: cell(),
+      foodUtilities: cell(),
+      travel: cell(),
+      misc: cell(),
+    },
+    postProduction: {
+      marketing: cell(),
+      actorBudget: cell(),
+      foodUtilities: cell(),
+      travel: cell(),
+      misc: cell(),
+    },
+    contingency: {
+      marketing: cell(),
+      actorBudget: cell(),
+      foodUtilities: cell(),
+      travel: cell(),
+      misc: cell(),
+    },
+  };
+}
 
 export const DEFAULT_REVENUE: RevenueConfig = {
   totalCollections: 0,
@@ -152,33 +200,6 @@ export const DEFAULT_PROJECTIONS: ProjectionsConfig = {
 
 function sum(values: number[]): number {
   return values.reduce((a, b) => a + b, 0);
-}
-
-function normalizePhaseTotals(phases: Record<PhaseKey, number>, totalBudget: number): Record<PhaseKey, number> {
-  const clean: Record<PhaseKey, number> = {
-    preProduction: Math.max(0, phases.preProduction || 0),
-    production: Math.max(0, phases.production || 0),
-    postProduction: Math.max(0, phases.postProduction || 0),
-    contingency: Math.max(0, phases.contingency || 0),
-  };
-  const phaseTotal = sum(Object.values(clean));
-  if (totalBudget <= 0 || phaseTotal <= 0) return clean;
-  const ratio = totalBudget / phaseTotal;
-  return {
-    preProduction: clean.preProduction * ratio,
-    production: clean.production * ratio,
-    postProduction: clean.postProduction * ratio,
-    contingency: clean.contingency * ratio,
-  };
-}
-
-function distributeFromTotal(totalBudget: number): Record<PhaseKey, number> {
-  return {
-    preProduction: totalBudget * DEFAULT_PHASE_RATIO.preProduction,
-    production: totalBudget * DEFAULT_PHASE_RATIO.production,
-    postProduction: totalBudget * DEFAULT_PHASE_RATIO.postProduction,
-    contingency: totalBudget * DEFAULT_PHASE_RATIO.contingency,
-  };
 }
 
 function syncRevenue(cfg: RevenueConfig): RevenueConfig {
@@ -221,6 +242,36 @@ function syncRevenue(cfg: RevenueConfig): RevenueConfig {
   };
 }
 
+/** Percent mode: exhibitor + distributor + investor must not exceed 100 % (P&A is remainder). */
+export function revenueSplitPercentInvalid(revenue: RevenueConfig): boolean {
+  if (revenue.mode !== "percent") return false;
+  const s = revenue.percent.exhibitor + revenue.percent.distributor + revenue.percent.investor;
+  return s > 100 + 1e-6;
+}
+
+/** Amount mode: split amounts should match total collections (after sync, pa fills remainder). */
+export function revenueSplitAmountInvalid(revenue: RevenueConfig): boolean {
+  if (revenue.mode !== "amount") return false;
+  const total = Math.max(0, revenue.totalCollections);
+  if (total <= 0) return false;
+  const synced = syncRevenue(revenue);
+  const sumAmt =
+    synced.amount.exhibitor + synced.amount.distributor + synced.amount.investor + synced.amount.pa;
+  return Math.abs(sumAmt - total) > 0.02;
+}
+
+export function validateFinanceInputs(revenue: RevenueConfig): { ok: boolean; errors: string[] } {
+  const errors: string[] = [];
+  if (revenueSplitPercentInvalid(revenue)) {
+    const s = revenue.percent.exhibitor + revenue.percent.distributor + revenue.percent.investor;
+    errors.push(`Revenue split exceeds 100 % (Exhibitor + Distributor + Investor = ${s.toFixed(2)} %).`);
+  }
+  if (revenueSplitAmountInvalid(revenue)) {
+    errors.push("Revenue amounts do not add up to Total Collections. Adjust splits or collections.");
+  }
+  return { ok: errors.length === 0, errors };
+}
+
 function computeIRR(cashFlows: number[]): number | null {
   if (!cashFlows.some((c) => c < 0) || !cashFlows.some((c) => c > 0)) return null;
   let rate = 0.1;
@@ -241,25 +292,43 @@ function computeIRR(cashFlows: number[]): number | null {
   return null;
 }
 
-export function computeMetrics(budget: BudgetInputs, revenue: RevenueConfig, npvCfg: NPVConfig): FinancialMetrics {
-  const travelShared = budget.travelBudget / 4;
-  const foodShared = budget.foodUtilitiesBudget / 4;
-  const miscShared = budget.miscBudget / 4;
+export function computeMetrics(
+  matrix: BudgetMatrix,
+  breakEvenMode: BreakEvenMode,
+  breakEvenManual: number,
+  revenue: RevenueConfig,
+  npvCfg: NPVConfig
+): FinancialMetrics {
+  let totalBudget = 0;
+  let totalActuals = 0;
+  let totalMarketingBudget = 0;
 
-  const preProduction = budget.phases.preProduction + travelShared + foodShared + miscShared;
-  const production = budget.phases.production + travelShared + foodShared + miscShared + budget.actorBudget;
-  const postProduction = budget.phases.postProduction + travelShared + foodShared + miscShared + budget.marketingBudget;
-  const contingency = budget.phases.contingency + travelShared + foodShared + miscShared;
+  const phaseBudgets: Record<PhaseKey, number> = {
+    preProduction: 0,
+    production: 0,
+    postProduction: 0,
+    contingency: 0,
+  };
 
-  const phaseTotal = preProduction + production + postProduction + contingency;
-  const totalBudget = Math.max(budget.totalBudget, phaseTotal);
+  for (const p of PHASE_KEYS) {
+    for (const c of BUDGET_CATEGORIES) {
+      const cell = matrix[p]?.[c] ?? { budget: 0, actual: 0 };
+      const b = Math.max(0, cell.budget);
+      const a = Math.max(0, cell.actual);
+      totalBudget += b;
+      totalActuals += a;
+      phaseBudgets[p] += b;
+      if (c === "marketing") totalMarketingBudget += b;
+    }
+  }
+
   const totalInvestment = totalBudget;
-
   const split = syncRevenue(revenue).amount;
   const netRevenue = Math.max(0, revenue.netRevenueInput);
   const roi = totalInvestment > 0 ? ((netRevenue - totalInvestment) / totalInvestment) * 100 : 0;
   const investorNet = split.investor;
-  const efficiencyRatio = budget.marketingBudget > 0 ? revenue.totalCollections / budget.marketingBudget : 0;
+  const efficiencyRatio =
+    totalMarketingBudget > 0 ? revenue.totalCollections / totalMarketingBudget : 0;
   const efficiencyLabel: FinancialMetrics["efficiencyLabel"] =
     efficiencyRatio < 2 ? "Over-spending" : efficiencyRatio <= 3 ? "Average" : "Highly efficient";
 
@@ -271,11 +340,13 @@ export function computeMetrics(budget: BudgetInputs, revenue: RevenueConfig, npv
 
   return {
     totalBudget,
+    totalActuals,
     totalInvestment,
-    preProduction,
-    production,
-    postProduction,
-    contingency,
+    totalMarketingBudget,
+    preProduction: phaseBudgets.preProduction,
+    production: phaseBudgets.production,
+    postProduction: phaseBudgets.postProduction,
+    contingency: phaseBudgets.contingency,
     exhibitorShare: split.exhibitor,
     distributorShare: split.distributor,
     investorShare: split.investor,
@@ -286,9 +357,7 @@ export function computeMetrics(budget: BudgetInputs, revenue: RevenueConfig, npv
     efficiencyRatio,
     efficiencyLabel,
     breakEven:
-      budget.breakEvenMode === "manual" && budget.breakEvenManual > 0
-        ? budget.breakEvenManual
-        : totalInvestment,
+      breakEvenMode === "manual" && breakEvenManual > 0 ? breakEvenManual : totalInvestment,
     npv,
     irr,
   };
@@ -320,15 +389,16 @@ export function territoryRemaining(
 }
 
 interface FinancialStore {
-  budget: BudgetInputs;
+  budgetMatrix: BudgetMatrix;
+  breakEvenMode: BreakEvenMode;
+  breakEvenManual: number;
   revenue: RevenueConfig;
   npvConfig: NPVConfig;
   territory: TerritoryConfig;
   projections: ProjectionsConfig;
+  reportGenerated: boolean;
 
-  setTotalBudget: (value: number) => void;
-  setPhaseAmount: (phase: PhaseKey, value: number) => void;
-  setBudgetInput: (patch: Partial<BudgetInputs>) => void;
+  setMatrixCell: (phase: PhaseKey, category: BudgetCategory, field: "budget" | "actual", value: number) => void;
   setBreakEvenMode: (mode: BreakEvenMode) => void;
   setBreakEvenManual: (value: number) => void;
   setRevenueMode: (mode: RevenueMode) => void;
@@ -345,69 +415,65 @@ interface FinancialStore {
   updateTerritoryEntry: (id: string, patch: Partial<TerritoryEntry>) => void;
   removeTerritoryEntry: (id: string) => void;
   importTerritoryRows: (rows: TerritoryEntry[]) => void;
+  setReportGenerated: (value: boolean) => void;
+  /** Restore Finance Studio fields to built-in demo numbers (valid for Generate report). */
+  loadDemoValues: () => void;
+  resetInputs: () => void;
   reset: () => void;
 }
 
-const newId = () => `${Date.now()}-${Math.random().toString(16).slice(2, 8)}`;
+let idCounter = 0;
+const newId = () => `${Date.now()}-${++idCounter}`;
+
+const DEMO_REVENUE_SEED: RevenueConfig = {
+  totalCollections: 52,
+  netRevenueInput: 21,
+  mode: "percent",
+  percent: { exhibitor: 32, distributor: 28, investor: 22, pa: 0 },
+  amount: { exhibitor: 0, distributor: 0, investor: 0, pa: 0 },
+};
+
+const DEMO_NPV: NPVConfig = {
+  discountRate: 12,
+  requiredReturn: 14,
+  cashFlows: [9, 13, 11, 7, 5],
+};
+
+const DEMO_PROJECTIONS: ProjectionsConfig = {
+  years: 5,
+  chartMode: "bar",
+  projectedCollections: [15, 17, 13, 9, 6],
+  actualCollections: [0, 0, 0, 0, 0],
+};
+
+const initialState = {
+  budgetMatrix: createDemoMatrix(),
+  breakEvenMode: "auto" as BreakEvenMode,
+  breakEvenManual: 0,
+  revenue: syncRevenue(DEMO_REVENUE_SEED),
+  npvConfig: DEMO_NPV,
+  territory: DEFAULT_TERRITORY,
+  projections: DEMO_PROJECTIONS,
+  reportGenerated: false,
+};
 
 export const useFinancialStore = create<FinancialStore>()(
   persist(
     (set) => ({
-      budget: DEFAULT_BUDGET,
-      revenue: DEFAULT_REVENUE,
-      npvConfig: DEFAULT_NPV,
-      territory: DEFAULT_TERRITORY,
-      projections: DEFAULT_PROJECTIONS,
+      ...initialState,
 
-      setTotalBudget: (value) =>
+      setMatrixCell: (phase, category, field, value) =>
         set((s) => {
-          const total = Math.max(0, value);
-          const lineCosts =
-            s.budget.actorBudget + s.budget.marketingBudget +
-            s.budget.travelBudget + s.budget.foodUtilitiesBudget + s.budget.miscBudget;
-          const distributable = Math.max(0, total - lineCosts);
-          return {
-            budget: {
-              ...s.budget,
-              totalBudget: total,
-              phases: distributeFromTotal(distributable),
-            },
-          };
+          const v = Math.max(0, value);
+          const row = { ...s.budgetMatrix[phase], [category]: { ...s.budgetMatrix[phase][category], [field]: v } };
+          return { budgetMatrix: { ...s.budgetMatrix, [phase]: row } };
         }),
 
-      setPhaseAmount: (phase, value) =>
-        set((s) => {
-          const phases = { ...s.budget.phases, [phase]: Math.max(0, value) };
-          const total = sum(Object.values(phases));
-          return { budget: { ...s.budget, phases, totalBudget: total } };
-        }),
+      setBreakEvenMode: (mode) => set({ breakEvenMode: mode }),
 
-      setBudgetInput: (patch) =>
-        set((s) => {
-          const next = { ...s.budget, ...patch };
-          const lineCostKeys = ['actorBudget', 'marketingBudget', 'travelBudget', 'foodUtilitiesBudget', 'miscBudget'] as const;
-          const hasLineCostChange = lineCostKeys.some((k) => k in patch);
-          if (hasLineCostChange && next.totalBudget > 0) {
-            // Auto-redistribute remaining budget to phases after line-item costs
-            const lineCosts =
-              next.actorBudget + next.marketingBudget +
-              next.travelBudget + next.foodUtilitiesBudget + next.miscBudget;
-            const distributable = Math.max(0, next.totalBudget - lineCosts);
-            next.phases = distributeFromTotal(distributable);
-          } else {
-            next.phases = normalizePhaseTotals(next.phases, next.totalBudget);
-          }
-          return { budget: next };
-        }),
+      setBreakEvenManual: (value) => set({ breakEvenManual: Math.max(0, value) }),
 
-      setBreakEvenMode: (mode) =>
-        set((s) => ({ budget: { ...s.budget, breakEvenMode: mode } })),
-
-      setBreakEvenManual: (value) =>
-        set((s) => ({ budget: { ...s.budget, breakEvenManual: Math.max(0, value) } })),
-
-      setRevenueMode: (mode) =>
-        set((s) => ({ revenue: syncRevenue({ ...s.revenue, mode }) })),
+      setRevenueMode: (mode) => set((s) => ({ revenue: syncRevenue({ ...s.revenue, mode }) })),
 
       setRevenueTotalCollections: (value) =>
         set((s) => ({ revenue: syncRevenue({ ...s.revenue, totalCollections: Math.max(0, value) }) })),
@@ -440,8 +506,12 @@ export const useFinancialStore = create<FinancialStore>()(
             projections: {
               ...s.projections,
               years: n,
-              projectedCollections: s.projections.projectedCollections.slice(0, n).concat(Array(Math.max(0, n - s.projections.projectedCollections.length)).fill(0)),
-              actualCollections: s.projections.actualCollections.slice(0, n).concat(Array(Math.max(0, n - s.projections.actualCollections.length)).fill(0)),
+              projectedCollections: s.projections.projectedCollections
+                .slice(0, n)
+                .concat(Array(Math.max(0, n - s.projections.projectedCollections.length)).fill(0)),
+              actualCollections: s.projections.actualCollections
+                .slice(0, n)
+                .concat(Array(Math.max(0, n - s.projections.actualCollections.length)).fill(0)),
             },
           };
         }),
@@ -485,7 +555,9 @@ export const useFinancialStore = create<FinancialStore>()(
           territory: {
             ...s.territory,
             entries: s.territory.entries.map((row) =>
-              row.id === id ? { ...row, ...patch, value: patch.value == null ? row.value : Math.max(0, patch.value) } : row
+              row.id === id
+                ? { ...row, ...patch, value: patch.value == null ? row.value : Math.max(0, patch.value) }
+                : row
             ),
           },
         })),
@@ -501,15 +573,45 @@ export const useFinancialStore = create<FinancialStore>()(
           },
         })),
 
-      reset: () =>
+      setReportGenerated: (value) => set({ reportGenerated: value }),
+
+      loadDemoValues: () =>
         set({
-          budget: DEFAULT_BUDGET,
+          budgetMatrix: createDemoMatrix(),
+          breakEvenMode: "auto",
+          breakEvenManual: 0,
+          revenue: syncRevenue(DEMO_REVENUE_SEED),
+          npvConfig: DEMO_NPV,
+          territory: DEFAULT_TERRITORY,
+          projections: DEMO_PROJECTIONS,
+          reportGenerated: false,
+        }),
+
+      resetInputs: () =>
+        set({
+          budgetMatrix: createEmptyMatrix(),
+          breakEvenMode: "auto",
+          breakEvenManual: 0,
           revenue: DEFAULT_REVENUE,
           npvConfig: DEFAULT_NPV,
-          territory: DEFAULT_TERRITORY,
-          projections: DEFAULT_PROJECTIONS,
+          reportGenerated: false,
         }),
+
+      reset: () => set({ ...initialState }),
     }),
-    { name: "scriptmind-financial-v2", storage: createJSONStorage(() => localStorage) }
+    {
+      name: "scriptmind-financial-v5-demo",
+      storage: createJSONStorage(() => localStorage),
+      partialize: (s) => ({
+        budgetMatrix: s.budgetMatrix,
+        breakEvenMode: s.breakEvenMode,
+        breakEvenManual: s.breakEvenManual,
+        revenue: s.revenue,
+        npvConfig: s.npvConfig,
+        territory: s.territory,
+        projections: s.projections,
+        reportGenerated: s.reportGenerated,
+      }),
+    }
   )
 );

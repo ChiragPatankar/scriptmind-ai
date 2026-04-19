@@ -34,8 +34,16 @@ import {
 
 // ── Formatting helpers ─────────────────────────────────────────────────────────
 
-const fmt     = (n: number) => `₹${Math.abs(n).toFixed(1).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} Cr`;
+/** ₹ Crore amounts — always 2 decimal places (avoids float noise in UI). */
+const fmt = (n: number) =>
+  `₹${Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} Cr`;
 const fmtMult = (n: number) => `${n.toFixed(2)}×`;
+
+/** Round budget / ₹ Cr numbers to 2 decimals (fixes 35.20000000000001-style artifacts). */
+function round2Cr(n: number): number {
+  const x = Number.isFinite(n) ? n : 0;
+  return Math.round(x * 100) / 100;
+}
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 
@@ -291,7 +299,8 @@ export function ProjectionPanel({
   // ── State ──
   const [input, setInput]       = useState<ProjectionInput>({
     ...DEFAULT_INPUT,
-    budget:      budgetSeed      ?? DEFAULT_INPUT.budget,
+    budget:
+      budgetSeed !== undefined ? round2Cr(budgetSeed) : DEFAULT_INPUT.budget,
     scriptScore: scriptScoreSeed ?? DEFAULT_INPUT.scriptScore,
   });
   const [result, setResult]         = useState<ProjectionResult | null>(null);
@@ -303,7 +312,7 @@ export function ProjectionPanel({
   // Sync budget seed if parent changes it
   useEffect(() => {
     if (budgetSeed !== undefined) {
-      setInput((prev) => ({ ...prev, budget: budgetSeed }));
+      setInput((prev) => ({ ...prev, budget: round2Cr(budgetSeed) }));
     }
   }, [budgetSeed]);
 
@@ -330,7 +339,12 @@ export function ProjectionPanel({
   }, [input, recalculate]);
 
   const set = useCallback(<K extends keyof ProjectionInput>(key: K, val: ProjectionInput[K]) => {
-    setInput((prev) => ({ ...prev, [key]: val }));
+    setInput((prev) => {
+      if (key === "budget" && typeof val === "number") {
+        return { ...prev, budget: round2Cr(val) };
+      }
+      return { ...prev, [key]: val };
+    });
   }, []);
 
   // ── Derived display values ──
@@ -373,7 +387,13 @@ export function ProjectionPanel({
             </div>
           </div>
           <button
-            onClick={() => setInput({ ...DEFAULT_INPUT, budget: input.budget, scriptScore: input.scriptScore })}
+            onClick={() =>
+              setInput({
+                ...DEFAULT_INPUT,
+                budget: round2Cr(input.budget),
+                scriptScore: input.scriptScore,
+              })
+            }
             className={cn(
               "flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg",
               "text-text-muted border border-border hover:text-accent hover:border-accent/40",
@@ -486,9 +506,12 @@ export function ProjectionPanel({
               <input
                 type="number"
                 min={0}
-                step={5}
-                value={input.budget}
-                onChange={(e) => set("budget", Math.max(0, parseFloat(e.target.value) || 0))}
+                step={0.01}
+                value={input.budget === 0 ? "" : round2Cr(input.budget)}
+                onChange={(e) => {
+                  const raw = e.target.value;
+                  set("budget", round2Cr(Math.max(0, parseFloat(raw) || 0)));
+                }}
                 className={cn(
                   "w-full rounded-xl pl-7 pr-10 py-2.5 text-sm font-semibold",
                   "bg-surface-2 border border-border text-text-primary",
@@ -798,7 +821,7 @@ export function ProjectionPanel({
                     <Tag label={f.audience} color={COLORS.purple} />
                   </div>
                   <div className="flex justify-between text-[11px] pt-1 border-t border-border/30">
-                    <span className="text-text-muted">₹{f.budget} Cr</span>
+                    <span className="text-text-muted">₹{round2Cr(f.budget).toFixed(2)} Cr</span>
                     <span className="text-text-muted">→ ₹{f.collections} Cr</span>
                     <span className="font-bold" style={{ color: COLORS.green }}>{f.multiplier.toFixed(2)}×</span>
                   </div>

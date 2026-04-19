@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState, useCallback, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
+import { motion } from "framer-motion";
 import {
   BarChart, Bar, LineChart, Line, CartesianGrid, Legend, PieChart, Pie,
   Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, ReferenceArea,
@@ -9,16 +9,26 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Target, BarChart3, AlertTriangle,
   CheckCircle2, XCircle, Calculator, Globe, RefreshCcw, Save, Info,
-  FileDown, Upload, Plus, Trash2, Percent, ToggleLeft, ToggleRight,
-  Layers, Landmark, Gauge, Film, ShieldAlert, ShieldCheck, Zap,
+  FileDown, Upload, Plus, Trash2, Percent, ToggleLeft, ToggleRight, Loader2,
+  Layers, Landmark, Gauge, Film, ShieldAlert, ShieldCheck, Zap, Sparkles,
   SlidersHorizontal, Lightbulb, ChevronRight, PieChart as PieChartIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROIGauge } from "@/components/dashboard/ROIGauge";
 import { ProjectionPanel } from "@/components/dashboard/ProjectionPanel";
 import {
-  type PhaseKey, type SplitKey, type TerritoryEntry, type BreakEvenMode,
-  computeMetrics, territoryRemaining, territoryTotal, useFinancialStore,
+  type PhaseKey,
+  type SplitKey,
+  type TerritoryEntry,
+  type BreakEvenMode,
+  type BudgetCategory,
+  BUDGET_CATEGORIES,
+  computeMetrics,
+  territoryRemaining,
+  territoryTotal,
+  useFinancialStore,
+  validateFinanceInputs,
+  revenueSplitPercentInvalid,
 } from "@/lib/financial-store";
 import { saveFinancialData, getFinancialData } from "@/lib/financial/api";
 import { computeDecision, generateInsights } from "@/lib/financial/insights";
@@ -43,6 +53,12 @@ const fmtPct = (n: number, d = 1) => `${n.toFixed(d)}%`;
 const fmtX   = (n: number)        => `${n.toFixed(2)}×`;
 const clamp  = (n: number, lo=0)  => Math.max(lo, isFinite(n) ? n : 0);
 
+/** Round ₹ Cr numbers to 2 decimals (fixes float noise in inputs, e.g. break-even target). */
+function round2Cr(n: number): number {
+  const x = Number.isFinite(n) ? n : 0;
+  return Math.round(x * 100) / 100;
+}
+
 // ── Phase / split labels ────────────────────────────────────────────────────────
 const PHASE_LABEL: Record<PhaseKey, string> = {
   preProduction:  "Pre-production",
@@ -62,7 +78,43 @@ const SPLIT_LABEL: Record<SplitKey, string> = {
   investor:    "Investor",
   pa:          "P&A",
 };
+const CATEGORY_LABEL: Record<BudgetCategory, string> = {
+  marketing:      "Marketing",
+  actorBudget:    "Actor Budget",
+  foodUtilities:  "Food & Utilities",
+  travel:         "Travel",
+  misc:           "Miscellaneous",
+};
 const PLATFORM_OPTIONS: TerritoryEntry["platform"][] = ["Theatrical", "OTT", "Satellite"];
+
+function MatrixNumInput({
+  value,
+  onChange,
+  "aria-label": ariaLabel,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  "aria-label"?: string;
+}) {
+  return (
+    <input
+      type="number"
+      min={0}
+      step={0.1}
+      aria-label={ariaLabel}
+      placeholder="0"
+      value={!isFinite(value) || value === 0 ? "" : value}
+      onChange={(e) => {
+        const raw = e.target.value;
+        onChange(raw === "" ? 0 : Math.max(0, Number(raw) || 0));
+      }}
+      className={cn(
+        "w-full min-w-[4.5rem] h-8 px-2 rounded-lg text-xs text-text-primary border bg-surface-2",
+        "focus:outline-none focus:ring-2 focus:ring-accent/25 border-border",
+      )}
+    />
+  );
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 //  Shared micro-components
@@ -105,8 +157,8 @@ function NumField({
   label: string; value: number; onChange?: (n: number) => void;
   suffix?: string; error?: string; tooltip?: string; min?: number; readOnly?: boolean;
 }) {
-  // Show empty string when value is 0 so "0" renders as a placeholder, not a fixed value
-  const displayValue = (!isFinite(value) || value === 0) ? "" : value;
+  // Editable: empty when 0. All displayed amounts rounded to 2 dp to avoid 35.20000000000001-style floats.
+  const displayValue = (!isFinite(value) || value === 0) ? "" : round2Cr(value);
 
   return (
     <div className="space-y-1">
@@ -120,12 +172,13 @@ function NumField({
       </label>
       <div className="relative">
         <input
-          type="number" min={min} step={0.1} readOnly={readOnly}
-          value={readOnly ? (isFinite(value) ? value : 0) : displayValue}
+          type="number" min={min} step={0.01} readOnly={readOnly}
+          value={readOnly ? (isFinite(value) ? round2Cr(value) : 0) : displayValue}
           placeholder="0"
           onChange={(e) => {
             const raw = e.target.value;
-            onChange?.(raw === "" ? 0 : Math.max(min, Number(raw) || 0));
+            const next = raw === "" ? 0 : Math.max(min, Number(raw) || 0);
+            onChange?.(round2Cr(next));
           }}
           className={cn(
             "w-full h-10 px-3 pr-12 rounded-xl text-sm text-text-primary border bg-surface-2",
@@ -190,15 +243,6 @@ function MetricBox({ label, value, color, guidance, icon: Icon }: {
       </div>
       <div className="text-xl font-black tabular-nums" style={{ color }}>{value}</div>
       {guidance && <p className="text-[10px] text-text-muted">{guidance}</p>}
-    </div>
-  );
-}
-
-function Row({ label, val }: { label: string; val: number }) {
-  return (
-    <div className="flex justify-between text-[11px]">
-      <span className="text-text-muted">{label}</span>
-      <span className="font-semibold text-text-primary">{fmt(val)}</span>
     </div>
   );
 }
@@ -301,20 +345,42 @@ function parseTerritoryCsv(text: string): { rows: TerritoryEntry[]; errors: stri
 
 export default function FinancialPage() {
   const {
-    budget, revenue, npvConfig, territory, projections,
-    setTotalBudget, setPhaseAmount, setBudgetInput,
-    setBreakEvenMode, setBreakEvenManual,
-    setRevenueMode, setRevenueTotalCollections, setRevenueSplit, setNetRevenueInput,
-    setNPVConfig, setCashFlow,
-    addTerritoryEntry, updateTerritoryEntry, removeTerritoryEntry, importTerritoryRows,
-    setProjectionYears, setChartMode, setProjectedValue, setActualValue,
+    budgetMatrix,
+    breakEvenMode,
+    breakEvenManual,
+    revenue,
+    npvConfig,
+    territory,
+    projections,
+    reportGenerated,
+    setMatrixCell,
+    setBreakEvenMode,
+    setBreakEvenManual,
+    setRevenueMode,
+    setRevenueTotalCollections,
+    setRevenueSplit,
+    setNetRevenueInput,
+    setNPVConfig,
+    setCashFlow,
+    addTerritoryEntry,
+    updateTerritoryEntry,
+    removeTerritoryEntry,
+    importTerritoryRows,
+    setProjectionYears,
+    setChartMode,
+    setProjectedValue,
+    setReportGenerated,
+    resetInputs,
+    loadDemoValues,
     reset,
   } = useFinancialStore();
 
-  const [saving, setSaving]             = useState(false);
-  const [csvErrors, setCsvErrors]       = useState<string[]>([]);
-  const [expandPhase, setExpandPhase]   = useState<PhaseKey | null>(null);
-  const [autoBalMsg, setAutoBalMsg]     = useState("");
+  const reportRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [csvErrors, setCsvErrors] = useState<string[]>([]);
+  const [autoBalMsg, setAutoBalMsg] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [generateErrors, setGenerateErrors] = useState<string[]>([]);
   const [cashFlowPeriod, setCashFlowPeriod] = useState<"year" | "month" | "week">("year");
   const [chartPeriod,    setChartPeriod]    = useState<"year" | "month" | "week">("year");
   const [yearsInputStr,  setYearsInputStr]  = useState(() => String(projections.years));
@@ -328,9 +394,12 @@ export default function FinancialPage() {
   const [territoryVizRequested, setTerritoryVizRequested] = useState(false);
 
   const metrics = useMemo(
-    () => computeMetrics(budget, revenue, npvConfig),
-    [budget, revenue, npvConfig],
+    () => computeMetrics(budgetMatrix, breakEvenMode, breakEvenManual, revenue, npvConfig),
+    [budgetMatrix, breakEvenMode, breakEvenManual, revenue, npvConfig],
   );
+
+  const inputValidation = useMemo(() => validateFinanceInputs(revenue), [revenue]);
+  const canGenerateReport = inputValidation.ok;
 
   // ── Decision + Insights ─────────────────────────────────────────────────────
   const decision = useMemo(() => computeDecision({
@@ -398,28 +467,19 @@ export default function FinancialPage() {
   }, [npvConfig.cashFlows, metrics.totalInvestment, cashFlowPeriod]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
-  const travelShare = budget.travelBudget / 4;
-  const foodShare   = budget.foodUtilitiesBudget / 4;
-  const miscShare   = budget.miscBudget / 4;
-  const phaseSharedTotal = (phase: PhaseKey) =>
-    budget.phases[phase] +
-    (phase === "production"     ? budget.actorBudget     : 0) +
-    (phase === "postProduction" ? budget.marketingBudget : 0) +
-    travelShare + foodShare + miscShare;
-
   const totalTerritory = territoryTotal(territory.entries);
   const territoryLeft  = territoryRemaining(territory.entries, revenue.totalCollections);
   const territoryOver  = revenue.totalCollections > 0 && totalTerritory > revenue.totalCollections;
 
-  const revPctSum   = revenue.percent.exhibitor + revenue.percent.distributor + revenue.percent.investor;
-  const revPctError = revenue.mode === "percent" && revPctSum > 100;
+  const revPctError = revenueSplitPercentInvalid(revenue);
 
   const breakEvenGap = metrics.breakEven - proj0;
   const breakEvenMet = proj0 >= metrics.breakEven;
 
-  const budgetPie = (["preProduction","production","postProduction","contingency"] as PhaseKey[]).map(
-    (k) => ({ name: PHASE_LABEL[k], value: phaseSharedTotal(k) }),
-  );
+  const budgetPie = (["preProduction", "production", "postProduction", "contingency"] as PhaseKey[]).map((k) => ({
+    name: PHASE_LABEL[k],
+    value: metrics[k],
+  }));
   const revenuePie = (["exhibitor","distributor","investor","pa"] as SplitKey[]).map((k) => ({
     name:  SPLIT_LABEL[k],
     value: metrics[`${k === "pa" ? "pa" : k}Share` as keyof typeof metrics] as number,
@@ -432,9 +492,10 @@ export default function FinancialPage() {
     year:       `${CHART_PERIOD_PREFIX[chartPeriod]}${i + 1}`,
     Budget:     metrics.totalBudget,
     Projection: projections.projectedCollections[i] ?? 0,
-    Actual:     projections.actualCollections[i] ?? 0,
+    Actual:     metrics.totalActuals,
   }));
-  const yMax = Math.max(metrics.totalBudget, ...projections.projectedCollections, ...projections.actualCollections, 1) * 1.1;
+  const yMax =
+    Math.max(metrics.totalBudget, metrics.totalActuals, ...projections.projectedCollections, 1) * 1.1;
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleCsvUpload = useCallback(() => {
@@ -483,9 +544,38 @@ export default function FinancialPage() {
 
   const handleSave = async () => {
     setSaving(true);
-    try { await saveFinancialData({ budget, revenue, npvConfig, territory, projections }); }
-    finally { setSaving(false); }
+    try {
+      await saveFinancialData({
+        budgetMatrix,
+        breakEvenMode,
+        breakEvenManual,
+        revenue,
+        npvConfig,
+        territory,
+        projections,
+      });
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const isValid = canGenerateReport;
+
+  const handleGenerateReport = useCallback(() => {
+    setGenerateErrors([]);
+    if (!inputValidation.ok) {
+      setGenerateErrors(inputValidation.errors);
+      return;
+    }
+    setIsGenerating(true);
+    window.setTimeout(() => {
+      setReportGenerated(true);
+      setIsGenerating(false);
+      window.setTimeout(() => {
+        reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 100);
+    }, 400);
+  }, [inputValidation, setReportGenerated]);
   const handleLoad = async () => {
     const p = await getFinancialData();
     if (p) importTerritoryRows(p.territory.entries);
@@ -520,10 +610,218 @@ export default function FinancialPage() {
         </div>
       </motion.div>
 
+      {/* ── Input section (normal flow — report mounts below when generated) ── */}
+      <section
+        className="rounded-2xl border border-border bg-surface p-4 sm:p-5 space-y-5 shadow-sm"
+        aria-labelledby="financial-inputs-heading"
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 id="financial-inputs-heading" className="text-sm font-black text-text-primary">Financial inputs</h2>
+              <p className="text-[10px] text-text-muted">Budget & actuals matrix, collections, NPV rates, revenue split. Generate the report when ready.</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button type="button" variant="secondary" size="sm" onClick={loadDemoValues}>
+                <Sparkles className="w-3.5 h-3.5 mr-1.5" />
+                Load demo data
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={resetInputs}>
+                <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />Reset inputs
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                disabled={!isValid || isGenerating}
+                onClick={handleGenerateReport}
+                className="min-w-[10rem]"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                    Generating…
+                  </>
+                ) : (
+                  "Generate Financial Report"
+                )}
+              </Button>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto rounded-xl border border-border/70">
+            <table className="w-full min-w-[720px] text-xs border-collapse">
+              <thead>
+                <tr className="bg-surface-2/80">
+                  <th className="text-left p-2 font-bold text-text-muted border-b border-border/60 w-28">Phase</th>
+                  {BUDGET_CATEGORIES.map((cat) => (
+                    <th key={cat} colSpan={2} className="p-2 text-center font-bold text-text-primary border-b border-border/60 border-l border-border/40">
+                      {CATEGORY_LABEL[cat]}
+                    </th>
+                  ))}
+                </tr>
+                <tr className="bg-surface-2/50 text-[10px] text-text-muted uppercase tracking-wide">
+                  <th className="p-1.5 border-b border-border/60" />
+                  {BUDGET_CATEGORIES.map((cat) => (
+                    <React.Fragment key={`h-${cat}`}>
+                      <th className="p-1.5 text-center border-b border-border/60 border-l border-border/40">Budget</th>
+                      <th className="p-1.5 text-center border-b border-border/60">Actual</th>
+                    </React.Fragment>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(["preProduction", "production", "postProduction", "contingency"] as PhaseKey[]).map((phase) => (
+                  <tr key={phase} className="border-b border-border/40">
+                    <td className="p-2 font-semibold text-text-secondary whitespace-nowrap" style={{ color: PHASE_COLOR[phase] }}>
+                      {PHASE_LABEL[phase]}
+                    </td>
+                    {BUDGET_CATEGORIES.map((cat) => {
+                      const cell = budgetMatrix[phase][cat];
+                      return (
+                        <React.Fragment key={`${phase}-${cat}`}>
+                          <td className="p-1 border-l border-border/30">
+                            <MatrixNumInput
+                              aria-label={`${PHASE_LABEL[phase]} ${CATEGORY_LABEL[cat]} budget`}
+                              value={cell.budget}
+                              onChange={(n) => setMatrixCell(phase, cat, "budget", n)}
+                            />
+                          </td>
+                          <td className="p-1">
+                            <MatrixNumInput
+                              aria-label={`${PHASE_LABEL[phase]} ${CATEGORY_LABEL[cat]} actual`}
+                              value={cell.actual}
+                              onChange={(n) => setMatrixCell(phase, cat, "actual", n)}
+                            />
+                          </td>
+                        </React.Fragment>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          <div className="flex flex-wrap gap-3 text-[11px]">
+            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
+              <span className="text-text-muted font-bold uppercase tracking-wide">Total budget</span>
+              <span className="ml-2 font-black text-text-primary tabular-nums">{fmt(metrics.totalBudget)}</span>
+            </div>
+            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
+              <span className="text-text-muted font-bold uppercase tracking-wide">Total actuals</span>
+              <span className="ml-2 font-black text-text-primary tabular-nums">{fmt(metrics.totalActuals)}</span>
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <NumField
+              label="Total collections"
+              value={revenue.totalCollections}
+              onChange={setRevenueTotalCollections}
+              suffix="Cr"
+              tooltip="Gross collections (all windows)"
+            />
+            <NumField
+              label="Discount rate"
+              value={npvConfig.discountRate}
+              onChange={(n) => setNPVConfig({ discountRate: n })}
+              suffix="%"
+              tooltip="Annual discount rate for NPV"
+            />
+            <NumField
+              label="Required rate of return"
+              value={npvConfig.requiredReturn}
+              onChange={(n) => setNPVConfig({ requiredReturn: n })}
+              suffix="%"
+              tooltip="IRR hurdle (annual)"
+            />
+            <NumField
+              label="Net revenue (for ROI)"
+              value={revenue.netRevenueInput}
+              onChange={setNetRevenueInput}
+              suffix="Cr"
+              tooltip="After deductions; drives ROI vs total budget"
+            />
+          </div>
+
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Revenue split</p>
+            <div className="flex items-center gap-2 flex-wrap">
+              {(["percent", "amount"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setRevenueMode(m)}
+                  className={cn(
+                    "px-4 py-1.5 rounded-xl text-xs font-bold border transition-all",
+                    revenue.mode === m
+                      ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-400"
+                      : "border-border text-text-muted",
+                  )}
+                >
+                  {m === "percent" ? (
+                    <>
+                      <Percent className="w-3 h-3 inline mr-1" />
+                      Percent
+                    </>
+                  ) : (
+                    "₹ Amount"
+                  )}
+                </button>
+              ))}
+              <span className="text-[10px] text-text-muted">P&amp;A auto-filled as remainder · amounts sync with %</span>
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              {(["exhibitor", "distributor", "investor"] as SplitKey[]).map((key) => (
+                <NumField
+                  key={key}
+                  label={SPLIT_LABEL[key]}
+                  value={revenue.mode === "percent" ? revenue.percent[key] : revenue.amount[key]}
+                  onChange={(n) => setRevenueSplit(key, n)}
+                  suffix={revenue.mode === "percent" ? "%" : "Cr"}
+                  error={revPctError && key === "investor" ? "Split > 100 %" : undefined}
+                />
+              ))}
+              <NumField
+                label="P&A (auto)"
+                value={revenue.mode === "percent" ? revenue.percent.pa : revenue.amount.pa}
+                suffix={revenue.mode === "percent" ? "%" : "Cr"}
+                readOnly
+                tooltip="Remainder so totals stay coherent"
+              />
+            </div>
+            {revPctError && (
+              <ErrBanner
+                msg={`Exhibitor + Distributor + Investor = ${fmtPct(
+                  revenue.percent.exhibitor + revenue.percent.distributor + revenue.percent.investor,
+                )} — exceeds 100 %. Lower a split or switch to amount mode.`}
+              />
+            )}
+            {!inputValidation.ok && !revPctError && inputValidation.errors[0] && (
+              <ErrBanner msg={inputValidation.errors[0]} />
+            )}
+            {generateErrors.map((msg, i) => (
+              <ErrBanner key={i} msg={msg} />
+            ))}
+          </div>
+      </section>
+
+      {!reportGenerated && (
+        <p className="text-center text-sm text-text-muted py-6">
+          Fill the matrix and revenue split, then click <strong className="text-text-primary">Generate Financial Report</strong> to unlock the full analysis.
+        </p>
+      )}
+
+      {reportGenerated && (
+        <div
+          id="financial-report"
+          ref={reportRef}
+          className="mt-10 space-y-8 scroll-mt-24"
+        >
       {/* ── KPI Strip ──────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.05 }}
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
         <KpiChip label="Total Budget"    value={fmt(metrics.totalBudget)}     color={C.blue}   icon={Layers}     />
+        <KpiChip label="Total Actuals"   value={fmt(metrics.totalActuals)}    color={C.orange} icon={BarChart3} />
         <KpiChip label="Collections"     value={fmt(revenue.totalCollections)} color={C.cyan}   icon={TrendingUp} />
         <KpiChip label="Net Revenue"     value={fmt(metrics.netRevenue)}       color={C.green}  icon={DollarSign} />
         <KpiChip label="ROI"             value={fmtPct(metrics.roi)}           color={metrics.roi>=0?C.green:C.red} icon={metrics.roi>=0?TrendingUp:TrendingDown} />
@@ -534,226 +832,11 @@ export default function FinancialPage() {
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* DECISION SUMMARY CARD                                             */}
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      <motion.section
-        initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.08 }}
-        className="rounded-2xl border overflow-hidden"
-        style={{ borderColor:`${decision.color}30`, background: decision.bgColor }}
-      >
-        <div className="px-5 py-4 flex flex-wrap items-start gap-4">
-          {/* Verdict badge */}
-          <div className="flex items-center gap-3 shrink-0">
-            <div className="w-11 h-11 rounded-xl flex items-center justify-center"
-              style={{ background:`${decision.color}20`, border:`1.5px solid ${decision.color}40` }}>
-              {decision.verdict === "STRONG_BUY"  && <ShieldCheck  className="w-5 h-5" style={{ color: decision.color }} />}
-              {decision.verdict === "HIGH_RISK"   && <ShieldAlert  className="w-5 h-5" style={{ color: decision.color }} />}
-              {decision.verdict === "MODERATE"    && <SlidersHorizontal className="w-5 h-5" style={{ color: decision.color }} />}
-            </div>
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Investment Verdict</div>
-              <div className="text-xl font-black leading-tight" style={{ color: decision.color }}>{decision.label}</div>
-            </div>
-          </div>
-
-          {/* Headline + reasons */}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-text-primary mb-2">{decision.headline}</p>
-            <div className="flex flex-wrap gap-2">
-              {decision.reasons.map((r, i) => (
-                <span key={i} className="flex items-center gap-1 text-[11px] text-text-muted px-2.5 py-1 rounded-full border border-border/60 bg-surface/60">
-                  <ChevronRight className="w-3 h-3 shrink-0" style={{ color: decision.color }} />
-                  {r}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </motion.section>
-
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 1. BUDGET SYSTEM                                                  */}
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="budget" title="Budget System" accent={C.blue} icon={Layers}
-        description="Set total budget; phases auto-distribute. Shared costs split equally across all 4 phases.">
-        <div className="grid sm:grid-cols-3 gap-4">
-          <NumField label="Total Budget"              value={budget.totalBudget}        onChange={setTotalBudget} suffix="Cr" tooltip="Distributes proportionally across phases" />
-          <NumField label="Actor Budget → Production" value={budget.actorBudget}        onChange={(n)=>setBudgetInput({actorBudget:n})} suffix="Cr" />
-          <NumField label="Marketing → Post-prod"     value={budget.marketingBudget}    onChange={(n)=>setBudgetInput({marketingBudget:n})} suffix="Cr" />
-        </div>
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted mb-3">
-            Shared Costs <span className="font-normal normal-case">(÷ 4 phases each)</span>
-          </p>
-          <div className="grid sm:grid-cols-3 gap-4">
-            <NumField label="Travel"          value={budget.travelBudget}         onChange={(n)=>setBudgetInput({travelBudget:n})} suffix="Cr" />
-            <NumField label="Food & Utilities" value={budget.foodUtilitiesBudget}  onChange={(n)=>setBudgetInput({foodUtilitiesBudget:n})} suffix="Cr" />
-            <NumField label="Miscellaneous"   value={budget.miscBudget}           onChange={(n)=>setBudgetInput({miscBudget:n})} suffix="Cr" />
-          </div>
-        </div>
-
-        {/* ── Budget Balance Tracker ─────────────────────────────────────── */}
-        {(() => {
-          const phaseSum    = budget.phases.preProduction + budget.phases.production + budget.phases.postProduction + budget.phases.contingency;
-          const directTotal = phaseSum + budget.actorBudget + budget.marketingBudget + budget.travelBudget + budget.foodUtilitiesBudget + budget.miscBudget;
-          const remaining   = budget.totalBudget - directTotal;
-          const overBudget  = directTotal > budget.totalBudget && budget.totalBudget > 0;
-          const balanced    = Math.abs(remaining) < 0.001 && budget.totalBudget > 0;
-          const pct         = budget.totalBudget > 0 ? Math.min(100, (directTotal / budget.totalBudget) * 100) : 0;
-          const barColor    = overBudget ? C.red : balanced ? C.green : C.gold;
-
-          return (
-            <div className="rounded-xl border p-4 space-y-3" style={{ borderColor: `${barColor}25`, background: `${barColor}06` }}>
-              {/* Header row */}
-              <div className="flex items-center justify-between">
-                <p className="text-[11px] font-bold uppercase tracking-widest" style={{ color: barColor }}>
-                  Budget Allocation
-                </p>
-                <span className="text-xs font-bold" style={{ color: barColor }}>
-                  {balanced ? "✓ Perfectly balanced" : overBudget ? `Over by ${fmt(Math.abs(remaining))}` : budget.totalBudget > 0 ? `${fmt(Math.abs(remaining))} remaining` : "Set a total budget"}
-                </span>
-              </div>
-
-              {/* Progress bar */}
-              {budget.totalBudget > 0 && (
-                <div className="space-y-1">
-                  <div className="h-2.5 rounded-full bg-surface-3 overflow-hidden relative">
-                    <motion.div
-                      initial={{ width: 0 }}
-                      animate={{ width: `${pct}%` }}
-                      transition={{ duration: 0.5, ease: "easeOut" }}
-                      className="h-full rounded-full"
-                      style={{ background: barColor }}
-                    />
-                  </div>
-                  <div className="flex justify-between text-[10px] text-text-muted">
-                    <span>₹0</span>
-                    <span className="font-bold" style={{ color: barColor }}>{pct.toFixed(1)}% allocated</span>
-                    <span>Total {fmt(budget.totalBudget)}</span>
-                  </div>
-                </div>
-              )}
-
-              {/* 4-slot breakdown chips */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { label: "Base Phases",    value: phaseSum,               color: C.blue   },
-                  { label: "Cast & Mktg",    value: budget.actorBudget + budget.marketingBudget, color: C.gold   },
-                  { label: "Shared Costs",   value: budget.travelBudget + budget.foodUtilitiesBudget + budget.miscBudget, color: C.cyan   },
-                  { label: "Total Allocated",value: directTotal,            color: barColor  },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="rounded-lg border p-2.5 text-center"
-                    style={{ borderColor: `${color}20`, background: `${color}08` }}>
-                    <div className="text-[9px] font-bold uppercase tracking-widest text-text-muted">{label}</div>
-                    <div className="text-sm font-black mt-0.5 tabular-nums" style={{ color }}>{fmt(value)}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Status banner */}
-              {budget.totalBudget > 0 && !balanced && (
-                overBudget
-                  ? <ErrBanner msg={`Total allocation (${fmt(directTotal)}) exceeds budget by ${fmt(Math.abs(remaining))}. Reduce phase amounts, shared costs, or specific line items.`} />
-                  : <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yellow-500/8 border border-yellow-500/25 text-xs text-yellow-400">
-                      <Info className="w-3.5 h-3.5 shrink-0" />
-                      {fmt(Math.abs(remaining))} is unallocated. Increase base phases or add specific costs to fully utilise your budget.
-                    </div>
-              )}
-              {balanced && <OkBanner msg={`All ${fmt(budget.totalBudget)} is fully allocated across phases and costs.`} />}
-            </div>
-          );
-        })()}
-
-        <div>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted mb-3">Phase Breakdown</p>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
-            {(Object.keys(budget.phases) as PhaseKey[]).map((k) => {
-              const total = phaseSharedTotal(k);
-              const open  = expandPhase === k;
-              return (
-                <div key={k} className="rounded-xl border overflow-hidden" style={{ borderColor:`${PHASE_COLOR[k]}30` }}>
-                  <div className="flex items-center justify-between px-3 py-2 cursor-pointer select-none"
-                    style={{ background:`${PHASE_COLOR[k]}10` }}
-                    onClick={() => setExpandPhase(open ? null : k)}>
-                    <span className="text-xs font-bold" style={{ color: PHASE_COLOR[k] }}>{PHASE_LABEL[k]}</span>
-                    <span className="text-xs font-black text-text-primary">{fmt(total)}</span>
-                  </div>
-                  <div className="px-3 pb-3 pt-2">
-                    <NumField label="Base Phase" value={budget.phases[k]} onChange={(n)=>setPhaseAmount(k,n)} suffix="Cr" />
-                  </div>
-                  <AnimatePresence>
-                    {open && (
-                      <motion.div initial={{height:0}} animate={{height:"auto"}} exit={{height:0}} className="overflow-hidden">
-                        <div className="px-3 pb-3 space-y-1 border-t border-border/40 pt-2">
-                          <Row label="Travel ÷ 4"  val={travelShare} />
-                          <Row label="Food ÷ 4"    val={foodShare}   />
-                          <Row label="Misc ÷ 4"    val={miscShare}   />
-                          {k === "production"     && <Row label="Actor budget" val={budget.actorBudget} />}
-                          {k === "postProduction" && <Row label="Marketing"    val={budget.marketingBudget} />}
-                          <div className="mt-1 pt-1 border-t border-border/40 flex justify-between text-[11px] font-bold">
-                            <span className="text-text-muted">Phase total</span>
-                            <span style={{ color: PHASE_COLOR[k] }}>{fmt(total)}</span>
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
-          </div>
-          <p className="text-[11px] text-text-muted mt-2">Click a phase header to see its full cost breakdown.</p>
-        </div>
-      </SCard>
-
-      {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 2. PROJECTION ENGINE                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <SCard id="projection" title="Projection Engine" accent={C.gold} icon={Landmark}
         description="Hybrid: 60 % weighted factors + 40 % similarity-weighted dataset. Fully deterministic.">
         <ProjectionPanel budgetSeed={metrics.totalBudget} hideHeader />
-      </SCard>
-
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 3. REVENUE & DISTRIBUTION                                         */}
-      {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="revenue" title="Revenue & Distribution" accent={C.cyan} icon={DollarSign}
-        description="Input in % or ₹. P&A is always auto-calculated as the remainder.">
-        <div className="flex items-center gap-2 flex-wrap">
-          {(["percent","amount"] as const).map((m) => (
-            <button key={m} onClick={() => setRevenueMode(m)}
-              className={cn("px-4 py-1.5 rounded-xl text-xs font-bold border transition-all",
-                revenue.mode === m ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-400" : "border-border text-text-muted")}>
-              {m === "percent" ? <><Percent className="w-3 h-3 inline mr-1"/>Percent mode</> : "₹ Amount mode"}
-            </button>
-          ))}
-          <span className="text-[11px] text-text-muted">P&amp;A = auto-remainder</span>
-        </div>
-        <div className="grid sm:grid-cols-2 gap-4">
-          <NumField label="Total Collections"    value={revenue.totalCollections} onChange={setRevenueTotalCollections} suffix="Cr" tooltip="Gross box-office across all platforms" />
-          <NumField label="Net Revenue (user input)" value={revenue.netRevenueInput} onChange={setNetRevenueInput} suffix="Cr" tooltip="After all deductions; used for ROI" />
-        </div>
-        <div className="grid sm:grid-cols-4 gap-3">
-          {(["exhibitor","distributor","investor"] as SplitKey[]).map((key) => (
-            <NumField key={key} label={SPLIT_LABEL[key]}
-              value={revenue.mode==="percent" ? revenue.percent[key] : revenue.amount[key]}
-              onChange={(n)=>setRevenueSplit(key,n)}
-              suffix={revenue.mode==="percent" ? "%" : "Cr"}
-              error={revPctError && key==="investor" ? "Sum > 100 %" : undefined} />
-          ))}
-          <NumField label="P&A (auto)" value={revenue.mode==="percent" ? revenue.percent.pa : revenue.amount.pa}
-            suffix={revenue.mode==="percent" ? "%" : "Cr"} readOnly tooltip="Auto-calculated as remainder" />
-        </div>
-        {revPctError && <ErrBanner msg={`Exhibitor + Distributor + Investor = ${fmtPct(revPctSum)} — exceeds 100 %. P&A set to 0.`} />}
-        <div className="grid grid-cols-4 gap-2">
-          {(["exhibitor","distributor","investor","pa"] as SplitKey[]).map((k,i) => (
-            <div key={k} className="rounded-xl p-3 border border-border/50 bg-surface-2 text-center">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">{SPLIT_LABEL[k]}</div>
-              <div className="text-base font-black mt-0.5" style={{ color: PIE_PAL[i] }}>{fmtPct(revenue.percent[k])}</div>
-              <div className="text-[10px] text-text-muted">{fmt(revenue.amount[k])}</div>
-            </div>
-          ))}
-        </div>
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -768,14 +851,14 @@ export default function FinancialPage() {
               {(["auto","manual"] as BreakEvenMode[]).map((m) => (
                 <button key={m} onClick={() => setBreakEvenMode(m)}
                   className={cn("flex-1 py-2 rounded-xl text-xs font-bold border transition-all capitalize",
-                    budget.breakEvenMode===m ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-400" : "border-border text-text-muted")}>
+                    breakEvenMode===m ? "border-yellow-500/50 bg-yellow-500/10 text-yellow-400" : "border-border text-text-muted")}>
                   {m==="auto" ? <><ToggleLeft className="w-3 h-3 inline mr-1"/>Auto</> : <><ToggleRight className="w-3 h-3 inline mr-1"/>Manual</>}
                 </button>
               ))}
             </div>
           </div>
-          {budget.breakEvenMode==="manual"
-            ? <NumField label="Break-even target (manual)"  value={budget.breakEvenManual} onChange={setBreakEvenManual} suffix="Cr" />
+          {breakEvenMode==="manual"
+            ? <NumField label="Break-even target (manual)"  value={breakEvenManual} onChange={setBreakEvenManual} suffix="Cr" />
             : <NumField label="Break-even target (= invest.)" value={metrics.breakEven}    readOnly suffix="Cr" />}
           <NumField label="Year 1 Projected Collection" value={proj0} onChange={(n)=>setProjectedValue(0,n)} suffix="Cr" />
         </div>
@@ -1062,10 +1145,45 @@ export default function FinancialPage() {
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* DECISION SUMMARY                                                  */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      <motion.section
+        initial={{ opacity:0, y:10 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.08 }}
+        className="rounded-2xl border overflow-hidden"
+        style={{ borderColor:`${decision.color}30`, background: decision.bgColor }}
+      >
+        <div className="px-5 py-4 flex flex-wrap items-start gap-4">
+          <div className="flex items-center gap-3 shrink-0">
+            <div className="w-11 h-11 rounded-xl flex items-center justify-center"
+              style={{ background:`${decision.color}20`, border:`1.5px solid ${decision.color}40` }}>
+              {decision.verdict === "STRONG_BUY"  && <ShieldCheck  className="w-5 h-5" style={{ color: decision.color }} />}
+              {decision.verdict === "HIGH_RISK"   && <ShieldAlert  className="w-5 h-5" style={{ color: decision.color }} />}
+              {decision.verdict === "MODERATE"    && <SlidersHorizontal className="w-5 h-5" style={{ color: decision.color }} />}
+            </div>
+            <div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Investment Verdict</div>
+              <div className="text-xl font-black leading-tight" style={{ color: decision.color }}>{decision.label}</div>
+            </div>
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-text-primary mb-2">{decision.headline}</p>
+            <div className="flex flex-wrap gap-2">
+              {decision.reasons.map((r, i) => (
+                <span key={i} className="flex items-center gap-1 text-[11px] text-text-muted px-2.5 py-1 rounded-full border border-border/60 bg-surface/60">
+                  <ChevronRight className="w-3 h-3 shrink-0" style={{ color: decision.color }} />
+                  {r}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </motion.section>
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 6. COMPARISON CHART                                               */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <SCard id="charts" title="Budget vs Projections vs Actuals" accent={C.cyan} icon={BarChart3}
-        description="All series share the same ₹ Cr axis. Green zone = above break-even (profit); red zone = below (loss).">
+        description="Budget and Actuals use matrix totals (flat across periods). Projection series uses per-period values below. Green / red zones vs break-even.">
         <div className="flex flex-wrap items-end gap-4">
           <div className="flex gap-2">
             {(["bar","line"] as const).map((mode) => (
@@ -1112,10 +1230,12 @@ export default function FinancialPage() {
           {Array.from({ length: projections.years }, (_, i) => (
             <div key={i} className="space-y-2">
               <NumField label={`${CHART_PERIOD_PREFIX[chartPeriod]}${i+1} Projection`} value={projections.projectedCollections[i]??0} onChange={(n)=>setProjectedValue(i,n)} suffix="Cr" />
-              <NumField label={`${CHART_PERIOD_PREFIX[chartPeriod]}${i+1} Actual`}     value={projections.actualCollections[i]??0}     onChange={(n)=>setActualValue(i,n)}     suffix="Cr" />
             </div>
           ))}
         </div>
+        <p className="text-[10px] text-text-muted">
+          Actuals in the chart = sum of all <strong className="text-text-primary">Actual</strong> cells in the input matrix ({fmt(metrics.totalActuals)}).
+        </p>
         <div className="h-[300px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             {projections.chartMode === "bar" ? (
@@ -1213,7 +1333,7 @@ export default function FinancialPage() {
           </div>
           <div className="space-y-2 text-sm">
             <div className="flex justify-between"><span className="text-text-muted">Collections</span><span className="font-bold text-text-primary">{fmt(revenue.totalCollections)}</span></div>
-            <div className="flex justify-between"><span className="text-text-muted">Marketing Budget</span><span className="font-bold text-text-primary">{fmt(budget.marketingBudget)}</span></div>
+            <div className="flex justify-between"><span className="text-text-muted">Marketing budget (matrix)</span><span className="font-bold text-text-primary">{fmt(metrics.totalMarketingBudget)}</span></div>
           </div>
           <div className="space-y-2">
             <BandRow ratio={metrics.efficiencyRatio} threshold={2}  label="< 2×" desc="Over-spending"    color={C.red}   />
@@ -1227,11 +1347,11 @@ export default function FinancialPage() {
       {/* 9. NPV & IRR                                                      */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <SCard id="npv" title="NPV & IRR" accent={C.green} icon={Calculator}
-        description="Net Present Value and Internal Rate of Return. Discount rate is always annual; period conversion is automatic.">
-        <div className="grid sm:grid-cols-2 gap-4">
-          <NumField label="Discount Rate" value={npvConfig.discountRate} onChange={(n)=>setNPVConfig({discountRate:n})} suffix="%" tooltip="WACC — weighted average cost of capital (annual)" />
-          <NumField label="Required Return (IRR hurdle)" value={npvConfig.requiredReturn} onChange={(n)=>setNPVConfig({requiredReturn:n})} suffix="%" tooltip="Minimum acceptable return for investors (annual)" />
-        </div>
+        description="Cash flows and period settings. Discount rate and required return are set in the sticky inputs above.">
+        <p className="text-[10px] text-text-muted mb-3">
+          Using discount <strong className="text-text-primary">{fmtPct(npvConfig.discountRate)}</strong> and required return{" "}
+          <strong className="text-text-primary">{fmtPct(npvConfig.requiredReturn)}</strong> (annual).
+        </p>
         <div>
           {/* Period selector row */}
           <div className="flex items-center justify-between mb-3">
@@ -1324,6 +1444,9 @@ export default function FinancialPage() {
           <MetricBox label="ROI"               value={fmtPct(metrics.roi)}          color={metrics.roi>=0?C.green:C.red} />
         </div>
       </SCard>
+
+        </div>
+      )}
 
     </div>
   );
