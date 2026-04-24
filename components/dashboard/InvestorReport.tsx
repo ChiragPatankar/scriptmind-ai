@@ -54,6 +54,8 @@ const REVENUE_COLORS = [C.green, C.blue, C.gold, C.muted];
 
 const fmt = (n: number) =>
   `₹${Math.abs(n).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} Cr`;
+const fmtSigned = (n: number) =>
+  `₹${(Number.isFinite(n) ? n : 0).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ",")} Cr`;
 const fmtPct = (n: number) => `${n.toFixed(1)}%`;
 
 function roiColor(roi: number) {
@@ -230,10 +232,11 @@ export const InvestorReport = React.forwardRef<HTMLDivElement, ReportData>(
 
     // ── Bar data ──
     const barData = [
-      { name: "Budget",    Budget: m.totalBudget,     Revenue: 0                },
-      { name: "Investment",Budget: m.totalInvestment,  Revenue: 0                },
-      { name: "Net Rev.",  Budget: 0,                  Revenue: m.netRevenue     },
-      { name: "Box Office",Budget: 0,                  Revenue: totalCollections },
+      { name: "Budget revenue", Budget: 0, Revenue: m.totalBudgetRevenue },
+      { name: "Planned expenses", Budget: m.totalBudgetedExpenses, Revenue: 0 },
+      { name: "Actual spend", Budget: m.totalActualInvestment, Revenue: 0 },
+      { name: "Net revenue", Budget: 0, Revenue: m.netRevenue },
+      { name: "Gross collections", Budget: 0, Revenue: totalCollections },
     ];
 
     // ── Territory data ──
@@ -265,14 +268,14 @@ export const InvestorReport = React.forwardRef<HTMLDivElement, ReportData>(
     else if (m.efficiencyRatio >= 2)
       insights.push({ severity: "yellow", title: "Average Marketing Efficiency", body: `Ratio ${m.efficiencyRatio.toFixed(2)}× — acceptable but improvable.` });
     else if (m.efficiencyRatio > 0)
-      insights.push({ severity: "red",    title: "Marketing Over-spending", body: `Ratio ${m.efficiencyRatio.toFixed(2)}× — marketing spend disproportionate to collections.` });
+      insights.push({ severity: "red",    title: "Marketing Over-spending", body: `Ratio ${m.efficiencyRatio.toFixed(2)}× — budget revenue weak vs marketing expense.` });
 
-    if (totalCollections >= m.totalBudget * 1.5)
-      insights.push({ severity: "green",  title: "Strong Box Office",       body: `Collections (${fmt(totalCollections)}) well exceed total budget.` });
-    else if (totalCollections >= m.totalBudget)
-      insights.push({ severity: "yellow", title: "Narrow Box Office Margin",body: `Collections barely cover total budget.` });
+    if (m.totalBudgetRevenue >= m.totalBudget * 1.5)
+      insights.push({ severity: "green",  title: "Strong Revenue Headroom",       body: `Budget revenue (${fmt(m.totalBudgetRevenue)}) comfortably exceeds planned expenses (${fmt(m.totalBudget)}).` });
+    else if (m.totalBudgetRevenue >= m.totalBudget)
+      insights.push({ severity: "yellow", title: "Tight Revenue Margin",body: `Budget revenue barely clears planned expenses — limited cushion.` });
     else
-      insights.push({ severity: "red",    title: "Collections Below Budget",body: `Box office ${fmt(totalCollections)} < budget ${fmt(m.totalBudget)}.` });
+      insights.push({ severity: "red",    title: "Revenue Below Planned Expenses",body: `Budget revenue ${fmt(m.totalBudgetRevenue)} < planned expenses ${fmt(m.totalBudget)}.` });
 
     // ── Shared inline styles ──
     const page: React.CSSProperties = {
@@ -331,13 +334,14 @@ export const InvestorReport = React.forwardRef<HTMLDivElement, ReportData>(
         {/* ── KPI row ── */}
         <Section title="Key Performance Indicators">
           <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-            <KPITile label="Total Budget"    value={fmt(m.totalBudget)}       color={C.blue}            sub="All line items"         />
-            <KPITile label="Box Office"      value={fmt(totalCollections)}    color={C.green}           sub="Gross collections"      />
-            <KPITile label="Net Revenue"     value={fmt(m.netRevenue)}        color={m.netRevenue >= m.totalInvestment ? C.green : C.gold} sub="After distributor & P&A" />
-            <KPITile label="Total Investment"value={fmt(m.totalInvestment)}   color={C.blue}            sub="Production + Marketing" />
+            <KPITile label="Budget revenue"    value={fmt(m.totalBudgetRevenue)} color={C.blue}            sub="Top-line revenue target" />
+            <KPITile label="Planned expenses" value={fmt(m.totalBudgetedExpenses)} color={C.purple}       sub="Sum of matrix budgets" />
+            <KPITile label="Actual spend"     value={fmt(m.totalActualInvestment)} color={C.red}           sub="Sum of matrix actuals" />
+            <KPITile label="Net revenue"     value={fmtSigned(m.netRevenue)}      color={m.netRevenue >= 0 ? C.green : C.gold} sub="Budget revenue − planned expenses" />
           </div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <KPITile label="Break-even"      value={fmt(m.breakEven)}         color={C.purple}          sub="= Total Investment"     />
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            <KPITile label="Gross collections" value={fmt(totalCollections)} color={C.green} sub="Actual / entered" />
+            <KPITile label="Break-even"      value={fmt(m.breakEven)}         color={C.purple}          sub="Revenue threshold vs spend" />
             <KPITile label="Efficiency Ratio"value={`${m.efficiencyRatio.toFixed(2)}×`} color={m.efficiencyRatio >= 3 ? C.green : m.efficiencyRatio >= 2 ? C.gold : C.red} sub={m.efficiencyLabel} />
             <KPITile label="Investor Return" value={fmt(m.investorNet)}       color={C.cyan}            sub="Net to investor"        />
             <KPITile label="NPV"             value={`${m.npv >= 0 ? "+" : "−"}${fmt(Math.abs(m.npv))}`} color={m.npv >= 0 ? C.green : C.red} sub="Discounted cash flow" />
@@ -350,7 +354,7 @@ export const InvestorReport = React.forwardRef<HTMLDivElement, ReportData>(
             {/* Budget pie */}
             <div style={{ flex: 1 }}>
               <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, marginBottom: 8,
-                textTransform: "uppercase", letterSpacing: "0.08em" }}>Budget Breakdown</div>
+                textTransform: "uppercase", letterSpacing: "0.08em" }}>Expenses by phase</div>
               <ResponsiveContainer width="100%" height={160}>
                 <PieChart>
                   <Pie data={budgetPie} cx="50%" cy="50%" outerRadius={62} dataKey="value"
@@ -405,7 +409,7 @@ export const InvestorReport = React.forwardRef<HTMLDivElement, ReportData>(
         </Section>
 
         {/* ── Budget vs Revenue bar ── */}
-        <Section title="Budget vs Revenue">
+        <Section title="Revenue vs expense snapshot">
           <ResponsiveContainer width="100%" height={160}>
             <BarChart data={barData} barCategoryGap="35%">
               <CartesianGrid strokeDasharray="3 3" stroke="#F3F4F6" vertical={false} />

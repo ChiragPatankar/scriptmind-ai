@@ -25,8 +25,9 @@ export interface BreakdownConfig {
 }
 
 export interface RevenueConfig {
+  /** Top-line budgeted / target revenue (₹ Cr) — drives net vs expenses. */
+  totalBudgetRevenue: number;
   totalCollections: number;
-  netRevenueInput: number;
   mode: RevenueMode;
   percent: Record<SplitKey, number>;
   amount: Record<SplitKey, number>;
@@ -57,16 +58,31 @@ export interface TerritoryConfig {
   musicRightsPct: number;
 }
 
+export type ChartPeriodType = "week" | "month" | "year";
+
 export interface ProjectionsConfig {
-  years: number;
+  /** Axis granularity for charts & projection columns. */
+  periodType: ChartPeriodType;
+  /** Number of periods shown (charts, projection inputs). Clamped per type in setter. */
+  periodCount: number;
   chartMode: ChartMode;
   projectedCollections: number[];
   actualCollections: number[];
 }
 
 export interface FinancialMetrics {
+  /** Sum of expense matrix budget cells (planned expenses). */
   totalBudget: number;
+  /** Alias: planned expenses total. */
+  totalBudgetedExpenses: number;
+  /** Sum of expense matrix actual cells (actual spend). */
   totalActuals: number;
+  /** Same as total actual expense spend — capital deployed for ROI/NPV. */
+  totalActualInvestment: number;
+  /** Input: total budgeted revenue (₹ Cr). */
+  totalBudgetRevenue: number;
+  /** Net = Total Budget Revenue − Total Actual Expenses (signed). */
+  netRevenue: number;
   totalInvestment: number;
   totalMarketingBudget: number;
   preProduction: number;
@@ -77,7 +93,6 @@ export interface FinancialMetrics {
   distributorShare: number;
   investorShare: number;
   paShare: number;
-  netRevenue: number;
   roi: number;
   investorNet: number;
   efficiencyRatio: number;
@@ -169,8 +184,8 @@ export function createEmptyMatrix(): BudgetMatrix {
 }
 
 export const DEFAULT_REVENUE: RevenueConfig = {
+  totalBudgetRevenue: 0,
   totalCollections: 0,
-  netRevenueInput: 0,
   mode: "percent",
   percent: { exhibitor: 0, distributor: 0, investor: 0, pa: 100 },
   amount: { exhibitor: 0, distributor: 0, investor: 0, pa: 0 },
@@ -192,7 +207,8 @@ export const DEFAULT_TERRITORY: TerritoryConfig = {
   musicRightsPct: 0,
 };
 export const DEFAULT_PROJECTIONS: ProjectionsConfig = {
-  years: 5,
+  periodType: "year",
+  periodCount: 5,
   chartMode: "bar",
   projectedCollections: [0, 0, 0, 0, 0],
   actualCollections: [0, 0, 0, 0, 0],
@@ -204,6 +220,7 @@ function sum(values: number[]): number {
 
 function syncRevenue(cfg: RevenueConfig): RevenueConfig {
   const total = Math.max(0, cfg.totalCollections);
+  const totalBudgetRevenue = Math.max(0, cfg.totalBudgetRevenue);
   if (cfg.mode === "percent") {
     const p = { ...cfg.percent };
     p.exhibitor = Math.max(0, p.exhibitor);
@@ -212,6 +229,7 @@ function syncRevenue(cfg: RevenueConfig): RevenueConfig {
     p.pa = Math.max(0, 100 - (p.exhibitor + p.distributor + p.investor));
     return {
       ...cfg,
+      totalBudgetRevenue,
       percent: p,
       amount: {
         exhibitor: (total * p.exhibitor) / 100,
@@ -232,6 +250,7 @@ function syncRevenue(cfg: RevenueConfig): RevenueConfig {
   const denom = total > 0 ? total : 1;
   return {
     ...cfg,
+    totalBudgetRevenue,
     amount: a,
     percent: {
       exhibitor: (a.exhibitor / denom) * 100,
@@ -270,6 +289,43 @@ export function validateFinanceInputs(revenue: RevenueConfig): { ok: boolean; er
     errors.push("Revenue amounts do not add up to Total Collections. Adjust splits or collections.");
   }
   return { ok: errors.length === 0, errors };
+}
+
+/** Sum budget / actual for one phase row (expense categories only). */
+export function phaseRowTotals(matrix: BudgetMatrix, phase: PhaseKey): { budget: number; actual: number } {
+  let budget = 0;
+  let actual = 0;
+  for (const c of BUDGET_CATEGORIES) {
+    const cell = matrix[phase]?.[c] ?? { budget: 0, actual: 0 };
+    budget += Math.max(0, cell.budget);
+    actual += Math.max(0, cell.actual);
+  }
+  return { budget, actual };
+}
+
+/** Sum budget / actual down each expense category column (all phases). */
+export function categoryColumnTotals(
+  matrix: BudgetMatrix
+): Record<BudgetCategory, { budget: number; actual: number }> {
+  const out = {} as Record<BudgetCategory, { budget: number; actual: number }>;
+  for (const cat of BUDGET_CATEGORIES) {
+    let budget = 0;
+    let actual = 0;
+    for (const p of PHASE_KEYS) {
+      const cell = matrix[p]?.[cat] ?? { budget: 0, actual: 0 };
+      budget += Math.max(0, cell.budget);
+      actual += Math.max(0, cell.actual);
+    }
+    out[cat] = { budget, actual };
+  }
+  return out;
+}
+
+export function clampPeriodCount(type: ChartPeriodType, n: number): number {
+  const x = Math.round(Number(n)) || 1;
+  if (type === "week") return Math.min(52, Math.max(1, x));
+  if (type === "month") return Math.min(60, Math.max(1, x));
+  return Math.min(20, Math.max(1, x));
 }
 
 function computeIRR(cashFlows: number[]): number | null {
@@ -324,23 +380,32 @@ export function computeMetrics(
 
   const totalInvestment = totalBudget;
   const split = syncRevenue(revenue).amount;
-  const netRevenue = Math.max(0, revenue.netRevenueInput);
-  const roi = totalInvestment > 0 ? ((netRevenue - totalInvestment) / totalInvestment) * 100 : 0;
+
+  const totalBudgetRevenue = Math.max(0, revenue.totalBudgetRevenue);
+  /** Net revenue = Total Budget Revenue − Total Actual Expenses (P&L model). */
+  const netRevenue = totalBudgetRevenue - totalActuals;
+
+  /** ROI % = (Net Revenue / Total Actual Investment) × 100 */
+  const roi = totalActuals > 0 ? (netRevenue / totalActuals) * 100 : 0;
   const investorNet = split.investor;
   const efficiencyRatio =
-    totalMarketingBudget > 0 ? revenue.totalCollections / totalMarketingBudget : 0;
+    totalMarketingBudget > 0 ? totalBudgetRevenue / totalMarketingBudget : 0;
   const efficiencyLabel: FinancialMetrics["efficiencyLabel"] =
     efficiencyRatio < 2 ? "Over-spending" : efficiencyRatio <= 3 ? "Average" : "Highly efficient";
 
+  const discount = npvCfg.discountRate / 100;
   const npv = npvCfg.cashFlows.reduce(
-    (acc, cf, i) => acc + cf / Math.pow(1 + npvCfg.discountRate / 100, i + 1),
-    -totalInvestment
+    (acc, cf, i) => acc + cf / Math.pow(1 + discount, i + 1),
+    -totalActuals,
   );
-  const irr = computeIRR([-totalInvestment, ...npvCfg.cashFlows]);
+  const irr = computeIRR([-totalActuals, ...npvCfg.cashFlows]);
 
   return {
     totalBudget,
+    totalBudgetedExpenses: totalBudget,
     totalActuals,
+    totalActualInvestment: totalActuals,
+    totalBudgetRevenue,
     totalInvestment,
     totalMarketingBudget,
     preProduction: phaseBudgets.preProduction,
@@ -357,7 +422,7 @@ export function computeMetrics(
     efficiencyRatio,
     efficiencyLabel,
     breakEven:
-      breakEvenMode === "manual" && breakEvenManual > 0 ? breakEvenManual : totalInvestment,
+      breakEvenMode === "manual" && breakEvenManual > 0 ? breakEvenManual : totalActuals,
     npv,
     irr,
   };
@@ -404,10 +469,11 @@ interface FinancialStore {
   setRevenueMode: (mode: RevenueMode) => void;
   setRevenueTotalCollections: (value: number) => void;
   setRevenueSplit: (key: SplitKey, value: number) => void;
-  setNetRevenueInput: (value: number) => void;
+  setTotalBudgetRevenue: (value: number) => void;
   setNPVConfig: (patch: Partial<NPVConfig>) => void;
   setCashFlow: (index: number, value: number) => void;
-  setProjectionYears: (years: number) => void;
+  setProjectionPeriodType: (periodType: ChartPeriodType) => void;
+  setPeriodCount: (count: number) => void;
   setChartMode: (mode: ChartMode) => void;
   setProjectedValue: (index: number, value: number) => void;
   setActualValue: (index: number, value: number) => void;
@@ -425,13 +491,13 @@ interface FinancialStore {
 let idCounter = 0;
 const newId = () => `${Date.now()}-${++idCounter}`;
 
-const DEMO_REVENUE_SEED: RevenueConfig = {
+const DEMO_REVENUE_SEED: RevenueConfig = syncRevenue({
+  totalBudgetRevenue: 56.2,
   totalCollections: 52,
-  netRevenueInput: 21,
   mode: "percent",
   percent: { exhibitor: 32, distributor: 28, investor: 22, pa: 0 },
   amount: { exhibitor: 0, distributor: 0, investor: 0, pa: 0 },
-};
+});
 
 const DEMO_NPV: NPVConfig = {
   discountRate: 12,
@@ -440,7 +506,8 @@ const DEMO_NPV: NPVConfig = {
 };
 
 const DEMO_PROJECTIONS: ProjectionsConfig = {
-  years: 5,
+  periodType: "year",
+  periodCount: 5,
   chartMode: "bar",
   projectedCollections: [15, 17, 13, 9, 6],
   actualCollections: [0, 0, 0, 0, 0],
@@ -487,8 +554,10 @@ export const useFinancialStore = create<FinancialStore>()(
           return { revenue: syncRevenue({ ...s.revenue, amount: { ...s.revenue.amount, [key]: clean } }) };
         }),
 
-      setNetRevenueInput: (value) =>
-        set((s) => ({ revenue: { ...s.revenue, netRevenueInput: Math.max(0, value) } })),
+      setTotalBudgetRevenue: (value) =>
+        set((s) => ({
+          revenue: syncRevenue({ ...s.revenue, totalBudgetRevenue: Math.max(0, value) }),
+        })),
 
       setNPVConfig: (patch) => set((s) => ({ npvConfig: { ...s.npvConfig, ...patch } })),
 
@@ -499,19 +568,39 @@ export const useFinancialStore = create<FinancialStore>()(
           return { npvConfig: { ...s.npvConfig, cashFlows } };
         }),
 
-      setProjectionYears: (years) =>
+      setProjectionPeriodType: (periodType) =>
         set((s) => {
-          const n = Math.min(5, Math.max(1, years));
+          const periodCount = clampPeriodCount(periodType, s.projections.periodCount);
+          const pad = (arr: number[]) => {
+            const next = arr.slice(0, periodCount);
+            while (next.length < periodCount) next.push(0);
+            return next;
+          };
           return {
             projections: {
               ...s.projections,
-              years: n,
-              projectedCollections: s.projections.projectedCollections
-                .slice(0, n)
-                .concat(Array(Math.max(0, n - s.projections.projectedCollections.length)).fill(0)),
-              actualCollections: s.projections.actualCollections
-                .slice(0, n)
-                .concat(Array(Math.max(0, n - s.projections.actualCollections.length)).fill(0)),
+              periodType,
+              periodCount,
+              projectedCollections: pad(s.projections.projectedCollections),
+              actualCollections: pad(s.projections.actualCollections),
+            },
+          };
+        }),
+
+      setPeriodCount: (count) =>
+        set((s) => {
+          const periodCount = clampPeriodCount(s.projections.periodType, count);
+          const pad = (arr: number[]) => {
+            const next = arr.slice(0, periodCount);
+            while (next.length < periodCount) next.push(0);
+            return next;
+          };
+          return {
+            projections: {
+              ...s.projections,
+              periodCount,
+              projectedCollections: pad(s.projections.projectedCollections),
+              actualCollections: pad(s.projections.actualCollections),
             },
           };
         }),
@@ -580,7 +669,7 @@ export const useFinancialStore = create<FinancialStore>()(
           budgetMatrix: createDemoMatrix(),
           breakEvenMode: "auto",
           breakEvenManual: 0,
-          revenue: syncRevenue(DEMO_REVENUE_SEED),
+          revenue: syncRevenue({ ...DEMO_REVENUE_SEED }),
           npvConfig: DEMO_NPV,
           territory: DEFAULT_TERRITORY,
           projections: DEMO_PROJECTIONS,
@@ -592,7 +681,7 @@ export const useFinancialStore = create<FinancialStore>()(
           budgetMatrix: createEmptyMatrix(),
           breakEvenMode: "auto",
           breakEvenManual: 0,
-          revenue: DEFAULT_REVENUE,
+          revenue: syncRevenue({ ...DEFAULT_REVENUE }),
           npvConfig: DEFAULT_NPV,
           reportGenerated: false,
         }),
@@ -600,7 +689,7 @@ export const useFinancialStore = create<FinancialStore>()(
       reset: () => set({ ...initialState }),
     }),
     {
-      name: "scriptmind-financial-v5-demo",
+      name: "scriptmind-financial-v6-demo",
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         budgetMatrix: s.budgetMatrix,

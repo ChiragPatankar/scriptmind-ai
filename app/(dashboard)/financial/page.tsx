@@ -4,7 +4,7 @@ import React, { useMemo, useState, useCallback, useEffect, useRef } from "react"
 import { motion } from "framer-motion";
 import {
   BarChart, Bar, LineChart, Line, CartesianGrid, Legend, PieChart, Pie,
-  Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine, ReferenceArea,
+  Cell, ResponsiveContainer, Tooltip, XAxis, YAxis, ReferenceLine,
 } from "recharts";
 import {
   TrendingUp, TrendingDown, DollarSign, Target, BarChart3, AlertTriangle,
@@ -12,6 +12,7 @@ import {
   FileDown, Upload, Plus, Trash2, Percent, ToggleLeft, ToggleRight, Loader2,
   Layers, Landmark, Gauge, Film, ShieldAlert, ShieldCheck, Zap, Sparkles,
   SlidersHorizontal, Lightbulb, ChevronRight, PieChart as PieChartIcon,
+  ChevronDown, ChevronUp, PencilLine,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROIGauge } from "@/components/dashboard/ROIGauge";
@@ -23,6 +24,9 @@ import {
   type BreakEvenMode,
   type BudgetCategory,
   BUDGET_CATEGORIES,
+  phaseRowTotals,
+  categoryColumnTotals,
+  clampPeriodCount,
   computeMetrics,
   territoryRemaining,
   territoryTotal,
@@ -48,7 +52,18 @@ const C = {
 const PIE_PAL = [C.blue, C.gold, C.cyan, C.purple, C.green, C.orange, C.muted];
 
 // ── Formatters ─────────────────────────────────────────────────────────────────
-const fmt    = (n: number)         => `₹${Math.max(0, n).toFixed(2)} Cr`;
+/** Indian locale number formatter — ₹1,23,456.00 style */
+const crFmt = new Intl.NumberFormat("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+const fmt = (n: number) =>
+  `₹${crFmt.format(Math.max(0, Number.isFinite(n) ? n : 0))} Cr`;
+
+/** Allows negative values — renders −₹ prefix for losses. */
+const fmtSigned = (n: number) => {
+  const v = Number.isFinite(n) ? n : 0;
+  return v < 0 ? `−₹${crFmt.format(Math.abs(v))} Cr` : `₹${crFmt.format(v)} Cr`;
+};
+
 const fmtPct = (n: number, d = 1) => `${n.toFixed(d)}%`;
 const fmtX   = (n: number)        => `${n.toFixed(2)}×`;
 const clamp  = (n: number, lo=0)  => Math.max(lo, isFinite(n) ? n : 0);
@@ -79,13 +94,30 @@ const SPLIT_LABEL: Record<SplitKey, string> = {
   pa:          "P&A",
 };
 const CATEGORY_LABEL: Record<BudgetCategory, string> = {
-  marketing:      "Marketing",
-  actorBudget:    "Actor Budget",
-  foodUtilities:  "Food & Utilities",
-  travel:         "Travel",
+  marketing:      "Marketing expense",
+  actorBudget:    "Actor expense",
+  foodUtilities:  "Food & utilities",
+  travel:         "Travel expense",
   misc:           "Miscellaneous",
 };
 const PLATFORM_OPTIONS: TerritoryEntry["platform"][] = ["Theatrical", "OTT", "Satellite"];
+
+const CHART_PERIOD_PREFIX = { year: "Y", month: "M", week: "W" } as const;
+const CHART_PERIOD_LABEL  = { year: "Yearly", month: "Monthly", week: "Weekly" } as const;
+
+/** Same horizontal footprint as MatrixNumInput — keeps column totals visually under inputs. */
+function MatrixCellTotal({ value }: { value: number }) {
+  return (
+    <div
+      className={cn(
+        "w-full min-w-[4.5rem] h-8 px-2 rounded-lg text-xs font-bold tabular-nums text-text-primary border border-transparent",
+        "flex items-center justify-end bg-surface-2/40",
+      )}
+    >
+      {round2Cr(value)}
+    </div>
+  );
+}
 
 function MatrixNumInput({
   value,
@@ -132,7 +164,11 @@ function SCard({
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35 }}
-      className={cn("rounded-2xl bg-surface border border-border overflow-hidden scroll-mt-20", className)}
+      className={cn(
+        "rounded-2xl bg-surface border border-border overflow-hidden scroll-mt-20",
+        "shadow-sm hover:shadow-md transition-shadow duration-300",
+        className,
+      )}
     >
       <div className="px-5 py-4 border-b border-border/60 flex items-center gap-3">
         {Icon && accent && (
@@ -162,12 +198,12 @@ function NumField({
 
   return (
     <div className="space-y-1">
-      <label className="flex items-center gap-1 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
+      <label className="flex items-center gap-1.5 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
         {label}
         {tooltip && (
-          <span title={tooltip} className="cursor-help opacity-50 hover:opacity-100">
-            <Info className="w-3 h-3" />
-          </span>
+          <Tip text={tooltip}>
+            <Info className="w-3 h-3 opacity-40 hover:opacity-90 transition-opacity cursor-help" />
+          </Tip>
         )}
       </label>
       <div className="relative">
@@ -217,32 +253,50 @@ function OkBanner({ msg }: { msg: string }) {
     </div>
   );
 }
-function KpiChip({ label, value, color, sub, icon: Icon }: {
+function KpiChip({ label, value, color, sub, icon: Icon, tooltip }: {
   label: string; value: string; color: string; sub?: string; icon?: React.ElementType;
+  tooltip?: string;
 }) {
   return (
-    <div className="flex flex-col gap-0.5 p-4 rounded-2xl border transition-all duration-200 hover:scale-[1.02]"
-      style={{ background: `${color}08`, borderColor: `${color}22` }}>
+    <div className={cn(
+      "flex flex-col gap-0.5 p-4 rounded-2xl border",
+      "transition-all duration-200 hover:scale-[1.03] hover:shadow-lg cursor-default select-none",
+    )}
+      style={{ background: `${color}08`, borderColor: `${color}22`, boxShadow: `0 2px 8px ${color}0a` }}>
       <div className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-text-muted">
-        {Icon && <Icon className="w-3.5 h-3.5" style={{ color }} />}{label}
+        {Icon && <Icon className="w-3.5 h-3.5" style={{ color }} />}
+        <span>{label}</span>
+        {tooltip && (
+          <Tip text={tooltip}>
+            <Info className="w-3 h-3 opacity-40 hover:opacity-90 transition-opacity cursor-help" />
+          </Tip>
+        )}
       </div>
-      <div className="text-lg font-black tabular-nums" style={{ color }}>{value}</div>
-      {sub && <div className="text-[10px] text-text-muted">{sub}</div>}
+      <div className="text-lg font-black tabular-nums leading-tight" style={{ color }}>{value}</div>
+      {sub && <div className="text-[10px] text-text-muted leading-snug">{sub}</div>}
     </div>
   );
 }
 
-function MetricBox({ label, value, color, guidance, icon: Icon }: {
+function MetricBox({ label, value, color, guidance, icon: Icon, tooltip, badge }: {
   label: string; value: string; color: string; guidance?: string; icon?: React.ElementType;
+  tooltip?: string; badge?: React.ReactNode;
 }) {
   return (
-    <div className="rounded-xl border p-4 space-y-1"
-      style={{ borderColor: `${color}25`, background: `${color}06` }}>
-      <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1">
-        {Icon && <Icon className="w-3 h-3" style={{ color }} />}{label}
+    <div className="rounded-xl border p-4 space-y-1.5 transition-all duration-200 hover:shadow-md"
+      style={{ borderColor: `${color}25`, background: `${color}06`, boxShadow: `0 1px 4px ${color}08` }}>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1.5 flex-wrap">
+        {Icon && <Icon className="w-3 h-3" style={{ color }} />}
+        <span>{label}</span>
+        {tooltip && (
+          <Tip text={tooltip}>
+            <Info className="w-3 h-3 opacity-40 hover:opacity-90 transition-opacity cursor-help" />
+          </Tip>
+        )}
+        {badge}
       </div>
       <div className="text-xl font-black tabular-nums" style={{ color }}>{value}</div>
-      {guidance && <p className="text-[10px] text-text-muted">{guidance}</p>}
+      {guidance && <p className="text-[10px] text-text-muted leading-relaxed">{guidance}</p>}
     </div>
   );
 }
@@ -264,6 +318,25 @@ function BandRow({ ratio, threshold, label, desc, color }: {
       <span>{desc}</span>
       {active && <CheckCircle2 className="w-3.5 h-3.5" />}
     </div>
+  );
+}
+
+/** Floating tooltip with fade + delay — hover triggers via CSS group */
+function Tip({ text, children }: { text: string; children: React.ReactNode }) {
+  return (
+    <span className="relative group/tip inline-flex shrink-0">
+      {children}
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-50 mb-2 w-60 -translate-x-1/2
+        rounded-xl border border-white/10 bg-gray-950/95 px-3 py-2.5 shadow-2xl
+        text-[10px] leading-relaxed text-gray-300 whitespace-normal
+        opacity-0 scale-95 group-hover/tip:opacity-100 group-hover/tip:scale-100
+        transition-all duration-200 ease-out delay-300">
+        {text}
+        {/* Arrow */}
+        <span className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0
+          border-x-4 border-x-transparent border-t-4 border-t-gray-950/95" />
+      </span>
+    </span>
   );
 }
 
@@ -359,14 +432,15 @@ export default function FinancialPage() {
     setRevenueMode,
     setRevenueTotalCollections,
     setRevenueSplit,
-    setNetRevenueInput,
+    setTotalBudgetRevenue,
     setNPVConfig,
     setCashFlow,
     addTerritoryEntry,
     updateTerritoryEntry,
     removeTerritoryEntry,
     importTerritoryRows,
-    setProjectionYears,
+    setProjectionPeriodType,
+    setPeriodCount,
     setChartMode,
     setProjectedValue,
     setReportGenerated,
@@ -381,14 +455,13 @@ export default function FinancialPage() {
   const [autoBalMsg, setAutoBalMsg] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generateErrors, setGenerateErrors] = useState<string[]>([]);
+  const [inputsCollapsed, setInputsCollapsed] = useState(false);
   const [cashFlowPeriod, setCashFlowPeriod] = useState<"year" | "month" | "week">("year");
-  const [chartPeriod,    setChartPeriod]    = useState<"year" | "month" | "week">("year");
-  const [yearsInputStr,  setYearsInputStr]  = useState(() => String(projections.years));
+  const [periodCountStr, setPeriodCountStr] = useState(() => String(projections.periodCount));
 
-  // Keep local years input in sync with external store changes (e.g. Reset)
   useEffect(() => {
-    setYearsInputStr(String(projections.years));
-  }, [projections.years]);
+    setPeriodCountStr(String(projections.periodCount));
+  }, [projections.periodCount]);
   const [territoryZoneVizData, setTerritoryZoneVizData] = useState<Array<{ name: string; value: number }>>([]);
   const [territoryPlatformVizData, setTerritoryPlatformVizData] = useState<Array<{ name: string; value: number }>>([]);
   const [territoryVizRequested, setTerritoryVizRequested] = useState(false);
@@ -397,6 +470,8 @@ export default function FinancialPage() {
     () => computeMetrics(budgetMatrix, breakEvenMode, breakEvenManual, revenue, npvConfig),
     [budgetMatrix, breakEvenMode, breakEvenManual, revenue, npvConfig],
   );
+
+  const expenseColumnTotals = useMemo(() => categoryColumnTotals(budgetMatrix), [budgetMatrix]);
 
   const inputValidation = useMemo(() => validateFinanceInputs(revenue), [revenue]);
   const canGenerateReport = inputValidation.ok;
@@ -420,14 +495,14 @@ export default function FinancialPage() {
     openingWeekend:   proj0 * 0.35,
     projected:        proj0,
     week1:            proj0 * 0.65,
-    breakEven:        metrics.breakEven,
-    totalCollections: revenue.totalCollections,
+    breakEven:           metrics.breakEven,
+    totalBudgetRevenue:  metrics.totalBudgetRevenue,
+    totalCollections:    revenue.totalCollections,
   }), [metrics, npvConfig.requiredReturn, proj0, revenue.totalCollections]);
 
   // ── Period-adjusted NPV & IRR ──────────────────────────────────────────────
   const PERIOD_DIVISOR = { year: 1, month: 12, week: 52 } as const;
   const PERIOD_LABEL   = { year: "Year",  month: "Month",  week: "Week"  } as const;
-  const PERIOD_PLURAL  = { year: "Years", month: "Months", week: "Weeks" } as const;
 
   const periodRate = useMemo(() => {
     const annual = npvConfig.discountRate / 100;
@@ -439,12 +514,12 @@ export default function FinancialPage() {
   const periodNpv = useMemo(() =>
     npvConfig.cashFlows.reduce(
       (acc, cf, i) => acc + cf / Math.pow(1 + periodRate, i + 1),
-      -metrics.totalInvestment,
+      -metrics.totalActualInvestment,
     )
-  , [npvConfig.cashFlows, periodRate, metrics.totalInvestment]);
+  , [npvConfig.cashFlows, periodRate, metrics.totalActualInvestment]);
 
   const periodIrr = useMemo(() => {
-    const cfs = [-metrics.totalInvestment, ...npvConfig.cashFlows];
+    const cfs = [-metrics.totalActualInvestment, ...npvConfig.cashFlows];
     if (!cfs.some((c) => c < 0) || !cfs.some((c) => c > 0)) return null;
     let rate = 0.1 / PERIOD_DIVISOR[cashFlowPeriod];
     for (let iter = 0; iter < 250; iter++) {
@@ -464,7 +539,7 @@ export default function FinancialPage() {
     }
     return null;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [npvConfig.cashFlows, metrics.totalInvestment, cashFlowPeriod]);
+  }, [npvConfig.cashFlows, metrics.totalActualInvestment, cashFlowPeriod]);
 
   // ── Derived ─────────────────────────────────────────────────────────────────
   const totalTerritory = territoryTotal(territory.entries);
@@ -485,17 +560,59 @@ export default function FinancialPage() {
     value: metrics[`${k === "pa" ? "pa" : k}Share` as keyof typeof metrics] as number,
   }));
 
-  const CHART_PERIOD_PREFIX = { year: "Y", month: "M", week: "W" } as const;
-  const CHART_PERIOD_LABEL  = { year: "Years", month: "Months", week: "Weeks" } as const;
+  const timeline = useMemo(() => {
+    const n = projections.periodCount;
+    const pt = projections.periodType;
+    const prefix = CHART_PERIOD_PREFIX[pt];
+    let cum = 0;
+    let breakEvenX: string | null = null;
+    const rows = Array.from({ length: n }, (_, i) => {
+      const proj = projections.projectedCollections[i] ?? 0;
+      cum += proj;
+      const period = `${prefix}${i + 1}`;
+      if (breakEvenX == null && metrics.breakEven > 0 && cum >= metrics.breakEven) {
+        breakEvenX = period;
+      }
+      return {
+        period,
+        Budget: n > 0 ? metrics.totalBudget / n : 0,
+        Projection: proj,
+        Actual: n > 0 ? metrics.totalActuals / n : 0,
+        cumulativeProjection: cum,
+      };
+    });
+    return { rows, breakEvenX };
+  }, [
+    projections.periodCount,
+    projections.periodType,
+    projections.projectedCollections,
+    metrics.totalBudget,
+    metrics.totalActuals,
+    metrics.breakEven,
+  ]);
 
-  const timeline = Array.from({ length: projections.years }, (_, i) => ({
-    year:       `${CHART_PERIOD_PREFIX[chartPeriod]}${i + 1}`,
-    Budget:     metrics.totalBudget,
-    Projection: projections.projectedCollections[i] ?? 0,
-    Actual:     metrics.totalActuals,
-  }));
   const yMax =
-    Math.max(metrics.totalBudget, metrics.totalActuals, ...projections.projectedCollections, 1) * 1.1;
+    Math.max(
+      metrics.totalBudget,
+      metrics.totalActuals,
+      ...projections.projectedCollections,
+      metrics.breakEven,
+      1,
+    ) * 1.1;
+
+  const totalProjectedRevenue = useMemo(
+    () => projections.projectedCollections.reduce((s, v) => s + v, 0),
+    [projections.projectedCollections],
+  );
+
+  /** P&L comparison data — 5 single-value bars, no period breakdown */
+  const plData = useMemo(() => [
+    { name: "Budget Revenue",    value: metrics.totalBudgetRevenue,     fill: C.green,  desc: "Top-line budgeted revenue target (input)" },
+    { name: "Projected Revenue", value: totalProjectedRevenue,          fill: C.cyan,   desc: "Sum of all period revenue projections" },
+    { name: "Collections",       value: revenue.totalCollections,       fill: C.blue,   desc: "Gross box-office + OTT + satellite collections" },
+    { name: "Budget Expenses",   value: metrics.totalBudgetedExpenses,  fill: C.orange, desc: "Total planned expenses (sum of all budget cells)" },
+    { name: "Actual Expenses",   value: metrics.totalActualInvestment,  fill: C.red,    desc: "Total actual expenses — break-even & ROI denominator" },
+  ], [metrics, totalProjectedRevenue, revenue.totalCollections]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const handleCsvUpload = useCallback(() => {
@@ -571,9 +688,10 @@ export default function FinancialPage() {
     window.setTimeout(() => {
       setReportGenerated(true);
       setIsGenerating(false);
+      setInputsCollapsed(true);
       window.setTimeout(() => {
         reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 100);
+      }, 150);
     }, 400);
   }, [inputValidation, setReportGenerated]);
   const handleLoad = async () => {
@@ -601,7 +719,7 @@ export default function FinancialPage() {
             <p className="text-[11px] text-text-muted">Studio-grade film financial modelling</p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Button variant="ghost" size="sm" onClick={reset}><RefreshCcw className="w-3.5 h-3.5 mr-1.5"/>Reset</Button>
           <Button variant="secondary" size="sm" onClick={handleLoad}>Load model</Button>
           <Button size="sm" onClick={handleSave} disabled={saving}>
@@ -612,43 +730,73 @@ export default function FinancialPage() {
 
       {/* ── Input section (normal flow — report mounts below when generated) ── */}
       <section
-        className="rounded-2xl border border-border bg-surface p-4 sm:p-5 space-y-5 shadow-sm"
+        className="rounded-2xl border border-border bg-surface shadow-sm overflow-hidden"
         aria-labelledby="financial-inputs-heading"
       >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 id="financial-inputs-heading" className="text-sm font-black text-text-primary">Financial inputs</h2>
-              <p className="text-[10px] text-text-muted">Budget & actuals matrix, collections, NPV rates, revenue split. Generate the report when ready.</p>
+        {/* Section header — always visible */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-5">
+            <div className="flex items-start gap-2 min-w-0">
+              {/* Collapse toggle */}
+              <button
+                type="button"
+                aria-label={inputsCollapsed ? "Expand financial inputs" : "Collapse financial inputs"}
+                onClick={() => setInputsCollapsed(c => !c)}
+                className="mt-0.5 flex-shrink-0 w-6 h-6 rounded-md flex items-center justify-center text-text-muted hover:text-text-primary hover:bg-surface-2 transition-colors"
+              >
+                {inputsCollapsed ? <ChevronDown className="w-4 h-4" /> : <ChevronUp className="w-4 h-4" />}
+              </button>
+              <div className="min-w-0">
+                <h2 id="financial-inputs-heading" className="text-sm font-black text-text-primary flex items-center gap-1.5">
+                  Financial inputs
+                  {inputsCollapsed && reportGenerated && (
+                    <span className="text-[10px] font-normal text-text-muted bg-surface-2 px-1.5 py-0.5 rounded-full border border-border/60">
+                      collapsed — click to edit
+                    </span>
+                  )}
+                </h2>
+                <p className="text-[10px] text-text-muted">P&L inputs: expense matrix (₹ Cr), total budget revenue, collections, period settings, NPV cash flows, and revenue split.</p>
+              </div>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button type="button" variant="secondary" size="sm" onClick={loadDemoValues}>
                 <Sparkles className="w-3.5 h-3.5 mr-1.5" />
-                Load demo data
+                Load demo
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={resetInputs}>
-                <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />Reset inputs
+              <Button type="button" variant="ghost" size="sm" onClick={() => { resetInputs(); setInputsCollapsed(false); }}>
+                <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />Reset
               </Button>
               <Button
                 type="button"
                 size="sm"
                 disabled={!isValid || isGenerating}
                 onClick={handleGenerateReport}
-                className="min-w-[10rem]"
+                className="flex-1 sm:flex-none sm:min-w-[10rem]"
               >
                 {isGenerating ? (
                   <>
                     <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
                     Generating…
                   </>
+                ) : reportGenerated ? (
+                  <>
+                    <PencilLine className="w-3.5 h-3.5 mr-1.5" />
+                    Re-generate
+                  </>
                 ) : (
-                  "Generate Financial Report"
+                  "Generate Report"
                 )}
               </Button>
             </div>
           </div>
 
+          {/* Collapsible body */}
+          <div
+            className={`transition-all duration-300 ease-in-out overflow-hidden ${inputsCollapsed ? "max-h-0 opacity-0 pointer-events-none" : "max-h-[9999px] opacity-100"}`}
+          >
+          <div className="px-4 sm:px-5 pb-4 sm:pb-5 space-y-5">
+
           <div className="overflow-x-auto rounded-xl border border-border/70">
-            <table className="w-full min-w-[720px] text-xs border-collapse">
+            <table className="w-full min-w-[900px] text-xs border-collapse">
               <thead>
                 <tr className="bg-surface-2/80">
                   <th className="text-left p-2 font-bold text-text-muted border-b border-border/60 w-28">Phase</th>
@@ -657,6 +805,9 @@ export default function FinancialPage() {
                       {CATEGORY_LABEL[cat]}
                     </th>
                   ))}
+                  <th colSpan={2} className="p-2 text-center font-bold text-text-primary border-b border-border/60 border-l border-border/50 bg-surface-2/90">
+                    Row totals
+                  </th>
                 </tr>
                 <tr className="bg-surface-2/50 text-[10px] text-text-muted uppercase tracking-wide">
                   <th className="p-1.5 border-b border-border/60" />
@@ -666,10 +817,14 @@ export default function FinancialPage() {
                       <th className="p-1.5 text-center border-b border-border/60">Actual</th>
                     </React.Fragment>
                   ))}
+                  <th className="p-1.5 text-center border-b border-border/60 border-l border-border/50 font-bold text-text-secondary">Σ Budget</th>
+                  <th className="p-1.5 text-center border-b border-border/60 font-bold text-text-secondary">Σ Actual</th>
                 </tr>
               </thead>
               <tbody>
-                {(["preProduction", "production", "postProduction", "contingency"] as PhaseKey[]).map((phase) => (
+                {(["preProduction", "production", "postProduction", "contingency"] as PhaseKey[]).map((phase) => {
+                  const rowTot = phaseRowTotals(budgetMatrix, phase);
+                  return (
                   <tr key={phase} className="border-b border-border/40">
                     <td className="p-2 font-semibold text-text-secondary whitespace-nowrap" style={{ color: PHASE_COLOR[phase] }}>
                       {PHASE_LABEL[phase]}
@@ -695,52 +850,191 @@ export default function FinancialPage() {
                         </React.Fragment>
                       );
                     })}
+                    <td className="border-l border-border/50 bg-surface-2/40 p-2 align-middle">
+                      <div className="flex min-h-8 items-center justify-end font-bold tabular-nums text-text-primary">
+                        {round2Cr(rowTot.budget)}
+                      </div>
+                    </td>
+                    <td className="bg-surface-2/40 p-2 align-middle">
+                      <div className="flex min-h-8 items-center justify-end font-bold tabular-nums text-text-primary">
+                        {round2Cr(rowTot.actual)}
+                      </div>
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
+              <tfoot>
+                <tr className="border-t-2 border-border/60 bg-surface-2/70">
+                  <td className="p-2 align-middle font-bold text-text-secondary whitespace-nowrap">
+                    Column total
+                  </td>
+                  {BUDGET_CATEGORIES.map((cat) => {
+                    const col = expenseColumnTotals[cat];
+                    return (
+                      <React.Fragment key={`foot-${cat}`}>
+                        <td className="p-1 border-l border-border/30 align-middle">
+                          <MatrixCellTotal value={col.budget} />
+                        </td>
+                        <td className="p-1 align-middle">
+                          <MatrixCellTotal value={col.actual} />
+                        </td>
+                      </React.Fragment>
+                    );
+                  })}
+                  <td className="border-l border-border/50 bg-surface-2/50 p-2 align-middle">
+                    <div className="flex min-h-8 items-center justify-end font-black tabular-nums text-accent">
+                      {round2Cr(metrics.totalBudgetedExpenses)}
+                    </div>
+                  </td>
+                  <td className="bg-surface-2/50 p-2 align-middle">
+                    <div className="flex min-h-8 items-center justify-end font-black tabular-nums text-accent">
+                      {round2Cr(metrics.totalActualInvestment)}
+                    </div>
+                  </td>
+                </tr>
+              </tfoot>
             </table>
           </div>
 
+          {/* ── Summary pills ─────────────────────────────────────────── */}
           <div className="flex flex-wrap gap-3 text-[11px]">
-            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
-              <span className="text-text-muted font-bold uppercase tracking-wide">Total budget</span>
-              <span className="ml-2 font-black text-text-primary tabular-nums">{fmt(metrics.totalBudget)}</span>
+            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60"
+              title="Sum of all budget cells in the expense matrix (planned outlay)">
+              <span className="text-text-muted font-bold uppercase tracking-wide">Total Budget Expenses</span>
+              <span className="ml-2 font-black text-text-primary tabular-nums">{fmt(metrics.totalBudgetedExpenses)}</span>
             </div>
-            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
-              <span className="text-text-muted font-bold uppercase tracking-wide">Total actuals</span>
-              <span className="ml-2 font-black text-text-primary tabular-nums">{fmt(metrics.totalActuals)}</span>
+            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60"
+              title="Sum of all actual cells in the expense matrix (capital deployed)">
+              <span className="text-text-muted font-bold uppercase tracking-wide">Total Actual Expenses</span>
+              <span className="ml-2 font-black text-text-primary tabular-nums">{fmt(metrics.totalActualInvestment)}</span>
+            </div>
+            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60 flex items-center gap-2"
+              title="Net Revenue = Total Budget Revenue − Total Actual Expenses">
+              <span className="text-text-muted font-bold uppercase tracking-wide">Net Revenue (computed)</span>
+              <span className="font-black tabular-nums" style={{ color: metrics.netRevenue >= 0 ? "#22C55E" : "#EF4444" }}>{fmtSigned(metrics.netRevenue)}</span>
+              {metrics.netRevenue > 0 && (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-green-500/15 text-green-400 border border-green-500/25">Profit</span>
+              )}
+              {metrics.netRevenue < 0 && (
+                <span className="px-1.5 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wide bg-red-500/15 text-red-400 border border-red-500/25">Loss</span>
+              )}
             </div>
           </div>
 
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <NumField
-              label="Total collections"
-              value={revenue.totalCollections}
-              onChange={setRevenueTotalCollections}
-              suffix="Cr"
-              tooltip="Gross collections (all windows)"
-            />
-            <NumField
-              label="Discount rate"
-              value={npvConfig.discountRate}
-              onChange={(n) => setNPVConfig({ discountRate: n })}
-              suffix="%"
-              tooltip="Annual discount rate for NPV"
-            />
-            <NumField
-              label="Required rate of return"
-              value={npvConfig.requiredReturn}
-              onChange={(n) => setNPVConfig({ requiredReturn: n })}
-              suffix="%"
-              tooltip="IRR hurdle (annual)"
-            />
-            <NumField
-              label="Net revenue (for ROI)"
-              value={revenue.netRevenueInput}
-              onChange={setNetRevenueInput}
-              suffix="Cr"
-              tooltip="After deductions; drives ROI vs total budget"
-            />
+          {/* ── Period settings ───────────────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1.5">
+              Period Settings
+              <span title="Controls the time granularity used for break-even timeline and projection inputs" className="cursor-help opacity-50 hover:opacity-100">
+                <Info className="w-3 h-3" />
+              </span>
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
+                  Period type
+                  <span title="Weekly: up to 52 periods · Monthly: up to 60 · Yearly: up to 20" className="cursor-help opacity-50 hover:opacity-100"><Info className="w-3 h-3" /></span>
+                </label>
+                <select
+                  value={projections.periodType}
+                  onChange={(e) => setProjectionPeriodType(e.target.value as typeof projections.periodType)}
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/25"
+                >
+                  <option value="week">Weekly</option>
+                  <option value="month">Monthly</option>
+                  <option value="year">Yearly</option>
+                </select>
+              </div>
+              <div className="space-y-1">
+                <label className="flex items-center gap-1 text-[11px] font-semibold text-text-secondary uppercase tracking-wide">
+                  Period count
+                  <span title="Number of time periods for break-even analysis and revenue projection" className="cursor-help opacity-50 hover:opacity-100"><Info className="w-3 h-3" /></span>
+                </label>
+                <input
+                  type="number" min={1} step={1}
+                  value={periodCountStr}
+                  onChange={(e) => setPeriodCountStr(e.target.value)}
+                  onBlur={() => {
+                    const raw = Number(periodCountStr) || 1;
+                    const n = clampPeriodCount(projections.periodType, raw);
+                    setPeriodCount(n);
+                    setPeriodCountStr(String(n));
+                  }}
+                  className="w-full h-10 px-3 rounded-xl border border-border bg-surface-2 text-sm text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/25"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* ── Revenue + NPV rate inputs ─────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Revenue &amp; discount inputs</p>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <NumField
+                label="Total budget revenue (₹ Cr)"
+                value={revenue.totalBudgetRevenue}
+                onChange={setTotalBudgetRevenue}
+                suffix="Cr"
+                tooltip="Primary P&L input: top-line revenue target. Drives Net Revenue, ROI, and efficiency ratio."
+              />
+              <NumField
+                label="Total collections (₹ Cr)"
+                value={revenue.totalCollections}
+                onChange={setRevenueTotalCollections}
+                suffix="Cr"
+                tooltip="Gross box-office + OTT + satellite collections across all platforms and windows."
+              />
+              <NumField
+                label="Discount rate (%)"
+                value={npvConfig.discountRate}
+                onChange={(n) => setNPVConfig({ discountRate: n })}
+                suffix="%"
+                tooltip="Annual discount rate used for NPV calculation. Represents the opportunity cost of capital (e.g. 10–15% for film projects)."
+              />
+              <NumField
+                label="Required return (%)"
+                value={npvConfig.requiredReturn}
+                onChange={(n) => setNPVConfig({ requiredReturn: n })}
+                suffix="%"
+                tooltip="Minimum acceptable IRR (hurdle rate). Accept the project only if IRR exceeds this value."
+              />
+            </div>
+          </div>
+
+          {/* ── NPV Cash Flows ────────────────────────────────────────── */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1.5">
+                NPV Cash Flows
+                <span title="Projected net cash inflows per period. Used alongside the discount rate to compute NPV and IRR." className="cursor-help opacity-50 hover:opacity-100"><Info className="w-3 h-3" /></span>
+              </p>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-text-muted">Period:</span>
+                <select
+                  value={cashFlowPeriod}
+                  onChange={(e) => setCashFlowPeriod(e.target.value as "year" | "month" | "week")}
+                  className="h-8 px-3 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/25"
+                >
+                  <option value="year">Yearly</option>
+                  <option value="month">Monthly</option>
+                  <option value="week">Weekly</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {npvConfig.cashFlows.map((cf, i) => (
+                <NumField key={i} label={`${PERIOD_LABEL[cashFlowPeriod]} ${i + 1} (₹ Cr)`} value={cf} onChange={(n) => setCashFlow(i, n)} suffix="Cr"
+                  tooltip={`Cash inflow in ${PERIOD_LABEL[cashFlowPeriod]} ${i + 1}. These are post-expense net inflows used to compute NPV and IRR.`} />
+              ))}
+            </div>
+            {cashFlowPeriod !== "year" && (
+              <p className="text-[10px] text-text-muted flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-2 border border-border/50">
+                <Info className="w-3 h-3 shrink-0 text-accent" />
+                Annual discount rate <strong className="text-text-primary mx-1">{fmtPct(npvConfig.discountRate)}</strong>
+                auto-converted to {cashFlowPeriod}ly rate for NPV/IRR. IRR shown annualised.
+              </p>
+            )}
           </div>
 
           <div className="space-y-3">
@@ -803,6 +1097,8 @@ export default function FinancialPage() {
               <ErrBanner key={i} msg={msg} />
             ))}
           </div>
+          </div>{/* end collapsible body */}
+          </div>{/* end collapsible wrapper */}
       </section>
 
       {!reportGenerated && (
@@ -819,16 +1115,55 @@ export default function FinancialPage() {
         >
       {/* ── KPI Strip ──────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.05 }}
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-        <KpiChip label="Total Budget"    value={fmt(metrics.totalBudget)}     color={C.blue}   icon={Layers}     />
-        <KpiChip label="Total Actuals"   value={fmt(metrics.totalActuals)}    color={C.orange} icon={BarChart3} />
-        <KpiChip label="Collections"     value={fmt(revenue.totalCollections)} color={C.cyan}   icon={TrendingUp} />
-        <KpiChip label="Net Revenue"     value={fmt(metrics.netRevenue)}       color={C.green}  icon={DollarSign} />
-        <KpiChip label="ROI"             value={fmtPct(metrics.roi)}           color={metrics.roi>=0?C.green:C.red} icon={metrics.roi>=0?TrendingUp:TrendingDown} />
-        <KpiChip label="Break-even"      value={fmt(metrics.breakEven)}        color={C.gold}   icon={Target}
-          sub={breakEvenMet ? "✓ Met by Y1 proj." : "Not met by Y1 proj."} />
-        <KpiChip label="Mktg Efficiency" value={fmtX(metrics.efficiencyRatio)} color={effColor} icon={Gauge}
-          sub={metrics.efficiencyLabel} />
+        className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+        <KpiChip label="Budget Revenue"    value={fmt(metrics.totalBudgetRevenue)} color={C.blue}   icon={TrendingUp}
+          tooltip="Primary P&L input: top-line budgeted revenue target before any expenses." />
+        <KpiChip label="Budget Expenses"  value={fmt(metrics.totalBudgetedExpenses)} color={C.purple} icon={Layers}
+          tooltip="Total Budget Expenses = sum of all budget cells across the expense matrix." />
+        <KpiChip label="Actual Expenses"  value={fmt(metrics.totalActualInvestment)} color={C.orange} icon={BarChart3}
+          tooltip="Total Actual Expenses = sum of all actual cells. Used as denominator for ROI and break-even." />
+        <KpiChip label="Collections"      value={fmt(revenue.totalCollections)} color={C.cyan}   icon={TrendingUp}
+          tooltip="Gross box-office + OTT + satellite collections across all platforms." />
+        <KpiChip
+          label="Net Revenue"
+          value={fmtSigned(metrics.netRevenue)}
+          color={metrics.netRevenue > 0 ? C.green : metrics.netRevenue < 0 ? C.red : C.muted}
+          icon={DollarSign}
+          sub={metrics.netRevenue > 0 ? "▲ Profit" : metrics.netRevenue < 0 ? "▼ Loss" : "Break-even"}
+          tooltip="Net Revenue = Total Budget Revenue − Total Actual Expenses. Positive = profit, negative = loss."
+        />
+        <KpiChip
+          label="ROI"
+          value={metrics.totalActualInvestment === 0 ? "N/A" : fmtPct(metrics.roi)}
+          color={metrics.totalActualInvestment === 0 ? C.muted : metrics.roi>=0?C.green:C.red}
+          icon={metrics.roi>=0?TrendingUp:TrendingDown}
+          tooltip={
+            metrics.totalActualInvestment === 0
+              ? "ROI not defined when actual expenses are zero. Enter actual expense values in the matrix to compute ROI."
+              : "ROI % = (Net Revenue ÷ Total Actual Expenses) × 100. Measures return on capital deployed."
+          }
+        />
+        <KpiChip label="Break-even"       value={fmt(metrics.breakEven)}        color={C.gold}   icon={Target}
+          sub={
+            timeline.breakEvenX
+              ? `✓ Met by ${timeline.breakEvenX}`
+              : metrics.breakEven === 0
+              ? "Set actual expenses to calculate"
+              : `Not met in ${projections.periodCount} periods`
+          }
+          tooltip="Break-even = Total Actual Expenses. Point where cumulative projected revenue equals total investment." />
+        <KpiChip
+          label="Mktg Efficiency"
+          value={metrics.totalMarketingBudget === 0 ? "N/A" : fmtX(metrics.efficiencyRatio)}
+          color={metrics.totalMarketingBudget === 0 ? C.muted : effColor}
+          icon={Gauge}
+          sub={metrics.totalMarketingBudget === 0 ? "No marketing spend" : metrics.efficiencyLabel}
+          tooltip={
+            metrics.totalMarketingBudget === 0
+              ? "Efficiency not available (no marketing spend). Enter a marketing budget in the expense matrix."
+              : "Marketing Efficiency = Budget Revenue ÷ Marketing Expense. >3× = highly efficient, 2–3× = average, <2× = over-spending."
+          }
+        />
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -836,17 +1171,20 @@ export default function FinancialPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       <SCard id="projection" title="Projection Engine" accent={C.gold} icon={Landmark}
         description="Hybrid: 60 % weighted factors + 40 % similarity-weighted dataset. Fully deterministic.">
-        <ProjectionPanel budgetSeed={metrics.totalBudget} hideHeader />
+        <ProjectionPanel budgetSeed={metrics.totalBudgetedExpenses} hideHeader />
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 4. BREAK-EVEN                                                     */}
       {/* ══════════════════════════════════════════════════════════════════ */}
       <SCard id="breakeven" title="Break-even Analysis" accent={C.gold} icon={Target}
-        description="Auto = total investment. Manual = custom target. Compare against Year 1 projection.">
-        <div className="grid sm:grid-cols-3 gap-4 items-end">
+        description="Break-even = Total Actual Expenses. Tracks when cumulative projected revenue first equals or exceeds this threshold.">
+        <div className="grid sm:grid-cols-3 gap-4 items-start">
           <div className="space-y-2">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Mode</p>
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1">
+              Mode
+              <span title="Auto: break-even = total actual expenses (from matrix). Manual: enter a custom target." className="cursor-help opacity-50 hover:opacity-100"><Info className="w-3 h-3" /></span>
+            </p>
             <div className="flex gap-2">
               {(["auto","manual"] as BreakEvenMode[]).map((m) => (
                 <button key={m} onClick={() => setBreakEvenMode(m)}
@@ -858,13 +1196,36 @@ export default function FinancialPage() {
             </div>
           </div>
           {breakEvenMode==="manual"
-            ? <NumField label="Break-even target (manual)"  value={breakEvenManual} onChange={setBreakEvenManual} suffix="Cr" />
-            : <NumField label="Break-even target (= invest.)" value={metrics.breakEven}    readOnly suffix="Cr" />}
-          <NumField label="Year 1 Projected Collection" value={proj0} onChange={(n)=>setProjectedValue(0,n)} suffix="Cr" />
+            ? <NumField label="Break-even target (manual)" value={breakEvenManual} onChange={setBreakEvenManual} suffix="Cr"
+                tooltip="Enter a custom break-even threshold in ₹ Cr. Leave on Auto to use total actual expenses." />
+            : <NumField label="Break-even (= actual expenses)" value={metrics.breakEven} readOnly suffix="Cr"
+                tooltip="Auto-computed: Break-even = Total Actual Expenses (sum of all actual cells in the matrix)." />}
+          <NumField label={`${CHART_PERIOD_PREFIX[projections.periodType]}1 projection (${CHART_PERIOD_LABEL[projections.periodType]})`}
+            value={proj0} onChange={(n)=>setProjectedValue(0,n)} suffix="Cr"
+            tooltip="Projected revenue for the first period. Used to compare against break-even threshold." />
         </div>
+
+        {/* Period projection inputs */}
+        {projections.periodCount > 1 && (
+          <div className="space-y-2">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
+              {CHART_PERIOD_LABEL[projections.periodType]} projections ({projections.periodCount} periods)
+            </p>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+              {Array.from({ length: projections.periodCount }, (_, i) => (
+                <NumField key={i}
+                  label={`${CHART_PERIOD_PREFIX[projections.periodType]}${i + 1}`}
+                  value={projections.projectedCollections[i] ?? 0}
+                  onChange={(n) => setProjectedValue(i, n)} suffix="Cr"
+                  tooltip={`Projected revenue for ${CHART_PERIOD_LABEL[projections.periodType]} ${i + 1}. Cumulative sum is compared against break-even.`} />
+              ))}
+            </div>
+          </div>
+        )}
+
         <div className="space-y-2">
           <div className="flex items-center justify-between text-xs font-semibold">
-            <span className="text-text-muted">Projection vs Break-even</span>
+            <span className="text-text-muted">Cumulative projection vs break-even</span>
             <span className={breakEvenMet ? "text-green-400" : "text-red-400"}>
               {breakEvenMet ? `+${fmt(Math.abs(breakEvenGap))} surplus` : `-${fmt(Math.abs(breakEvenGap))} shortfall`}
             </span>
@@ -879,9 +1240,20 @@ export default function FinancialPage() {
             <span>₹0</span><span>Break-even {fmt(metrics.breakEven)}</span>
           </div>
         </div>
-        {breakEvenMet
-          ? <OkBanner   msg={`Y1 projection (${fmt(proj0)}) covers break-even of ${fmt(metrics.breakEven)}.`} />
-          : <ErrBanner  msg={`Y1 projection falls ${fmt(Math.abs(breakEvenGap))} short of the break-even target.`} />}
+        {timeline.breakEvenX
+          ? <OkBanner msg={`Break-even met by projected value in ${timeline.breakEvenX} — cumulative projection clears ${fmt(metrics.breakEven)}.`} />
+          : metrics.breakEven === 0
+          ? <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yellow-500/8 border border-yellow-500/25 text-xs text-yellow-400">
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+              Break-even is ₹0.00 Cr — enter actual expenses in the matrix to set a meaningful threshold.
+            </div>
+          : breakEvenMet
+          ? <OkBanner msg={`${CHART_PERIOD_PREFIX[projections.periodType]}1 projection (${fmt(proj0)}) meets or exceeds break-even (${fmt(metrics.breakEven)}).`} />
+          : <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-red-500/10 border border-red-500/30 text-xs font-semibold text-red-400">
+              <XCircle className="w-3.5 h-3.5 shrink-0" />
+              Break-even not achieved within selected period — projected revenue does not reach {fmt(metrics.breakEven)} across {projections.periodCount} {CHART_PERIOD_LABEL[projections.periodType].toLowerCase()} periods.
+            </div>
+        }
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -905,39 +1277,41 @@ export default function FinancialPage() {
         {territoryOver && <ErrBanner msg={`Territory total (${fmt(totalTerritory)}) exceeds Total Collections (${fmt(revenue.totalCollections)}). Use Auto-balance to fix.`} />}
         {autoBalMsg && <OkBanner msg={autoBalMsg} />}
 
-        <div className="space-y-2">
-          <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2 text-[10px] font-bold uppercase tracking-widest text-text-muted px-1">
-            <span>Zone</span><span>State</span><span>City</span>
-            <span>Platform</span><span>Amount (Cr)</span><span>%</span><span/>
+        <div className="space-y-2 overflow-x-auto rounded-xl">
+          <div className="min-w-[560px]">
+            <div className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_3rem_2.5rem] gap-2 text-[10px] font-bold uppercase tracking-widest text-text-muted px-1 pb-1">
+              <span>Zone</span><span>State</span><span>City</span>
+              <span>Platform</span><span>Amount (Cr)</span><span className="text-center">%</span><span/>
+            </div>
+            {territory.entries.map((row) => {
+              const pct = revenue.totalCollections>0 ? fmtPct((row.value/revenue.totalCollections)*100) : "—";
+              return (
+                <div key={row.id} className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_3rem_2.5rem] gap-2 items-center mb-1.5">
+                  {(["zone","state","city"] as const).map((field) => (
+                    <input key={field}
+                      className="h-9 px-2 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/30 min-w-0"
+                      value={row[field]} placeholder={field.charAt(0).toUpperCase()+field.slice(1)}
+                      onChange={(e) => updateTerritoryEntry(row.id, { [field]: e.target.value })} />
+                  ))}
+                  <select className="h-9 px-2 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none min-w-0"
+                    value={row.platform} onChange={(e) => updateTerritoryEntry(row.id, { platform: e.target.value as TerritoryEntry["platform"] })}>
+                    {PLATFORM_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
+                  </select>
+                  <input type="number" min={0} step={0.1}
+                    className={cn("h-9 px-2 rounded-xl border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-1 min-w-0",
+                      territoryOver ? "border-red-500/50 focus:ring-red-500/25" : "border-border focus:ring-accent/30")}
+                    value={row.value === 0 ? "" : row.value}
+                    placeholder="0"
+                    onChange={(e) => updateTerritoryEntry(row.id, { value: Number(e.target.value)||0 })} />
+                  <span className="text-xs text-text-muted text-center tabular-nums">{pct}</span>
+                  <button onClick={() => removeTerritoryEntry(row.id)}
+                    className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors mx-auto">
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              );
+            })}
           </div>
-          {territory.entries.map((row) => {
-            const pct = revenue.totalCollections>0 ? fmtPct((row.value/revenue.totalCollections)*100) : "—";
-            return (
-              <div key={row.id} className="grid grid-cols-[1fr_1fr_1fr_1fr_1fr_auto_auto] gap-2 items-center">
-                {(["zone","state","city"] as const).map((field) => (
-                  <input key={field}
-                    className="h-9 px-2 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-accent/30"
-                    value={row[field]} placeholder={field.charAt(0).toUpperCase()+field.slice(1)}
-                    onChange={(e) => updateTerritoryEntry(row.id, { [field]: e.target.value })} />
-                ))}
-                <select className="h-9 px-2 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none"
-                  value={row.platform} onChange={(e) => updateTerritoryEntry(row.id, { platform: e.target.value as TerritoryEntry["platform"] })}>
-                  {PLATFORM_OPTIONS.map((p) => <option key={p} value={p}>{p}</option>)}
-                </select>
-                <input type="number" min={0} step={0.1}
-                  className={cn("h-9 px-2 rounded-xl border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-1",
-                    territoryOver ? "border-red-500/50 focus:ring-red-500/25" : "border-border focus:ring-accent/30")}
-                  value={row.value === 0 ? "" : row.value}
-                  placeholder="0"
-                  onChange={(e) => updateTerritoryEntry(row.id, { value: Number(e.target.value)||0 })} />
-                <span className="text-xs text-text-muted w-10 text-right">{pct}</span>
-                <button onClick={() => removeTerritoryEntry(row.id)}
-                  className="w-8 h-8 rounded-lg flex items-center justify-center hover:bg-red-500/10 text-text-muted hover:text-red-400 transition-colors">
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            );
-          })}
         </div>
 
         <div className="flex flex-wrap gap-2 items-center">
@@ -1182,111 +1556,99 @@ export default function FinancialPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 6. COMPARISON CHART                                               */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="charts" title="Budget vs Projections vs Actuals" accent={C.cyan} icon={BarChart3}
-        description="Budget and Actuals use matrix totals (flat across periods). Projection series uses per-period values below. Green / red zones vs break-even.">
-        <div className="flex flex-wrap items-end gap-4">
+      <SCard id="charts" title="P&L Financial Overview" accent={C.cyan} icon={BarChart3}
+        description="Single-value comparison: Budget Revenue vs Projected Revenue vs Collections vs Budget Expenses vs Actual Expenses. All values in ₹ Cr.">
+        <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-2">
             {(["bar","line"] as const).map((mode) => (
               <button key={mode} onClick={() => setChartMode(mode)}
-                className={cn("px-4 py-1.5 rounded-xl text-xs font-bold border transition-all capitalize",
+                className={cn("px-4 py-1.5 rounded-xl text-xs font-bold border transition-all",
                   projections.chartMode===mode ? "border-cyan-500/50 bg-cyan-500/10 text-cyan-400" : "border-border text-text-muted")}>
-                {mode==="bar" ? "Column chart" : "Line chart"}
+                {mode==="bar" ? "P&L Bar" : "Period Timeline"}
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs text-text-muted">{CHART_PERIOD_LABEL[chartPeriod]}:</span>
-            <input
-              type="number" min={1} max={5} step={1}
-              value={yearsInputStr}
-              onChange={(e) => setYearsInputStr(e.target.value)}
-              onBlur={() => {
-                const n = Math.min(5, Math.max(1, Math.round(Number(yearsInputStr) || 1)));
-                setProjectionYears(n);
-                setYearsInputStr(String(n));
-              }}
-              className="w-16 h-8 px-2 rounded-xl border border-border bg-surface-2 text-xs text-text-primary text-center focus:outline-none focus:ring-2 focus:ring-accent/25"
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-text-muted">Period:</span>
-            <select
-              value={chartPeriod}
-              onChange={(e) => setChartPeriod(e.target.value as "year" | "month" | "week")}
-              className="h-8 px-3 pr-8 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/25 transition-all appearance-none cursor-pointer"
-            >
-              <option value="year">📅 Year</option>
-              <option value="month">🗓️ Month</option>
-              <option value="week">📆 Week</option>
-            </select>
-          </div>
-          <div className="flex items-center gap-4 text-xs text-text-muted ml-auto">
-            <span>Budget: <strong className="text-text-primary">{fmt(metrics.totalBudget)}</strong></span>
+          <div className="ml-auto flex flex-wrap items-center gap-4 text-xs text-text-muted">
             <span>Break-even: <strong className="text-yellow-400">{fmt(metrics.breakEven)}</strong></span>
-            <span>Collections: <strong className="text-text-primary">{fmt(revenue.totalCollections)}</strong></span>
+            <span>Net Revenue: <strong style={{ color: metrics.netRevenue >= 0 ? C.green : C.red }}>{fmtSigned(metrics.netRevenue)}</strong></span>
           </div>
         </div>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {Array.from({ length: projections.years }, (_, i) => (
-            <div key={i} className="space-y-2">
-              <NumField label={`${CHART_PERIOD_PREFIX[chartPeriod]}${i+1} Projection`} value={projections.projectedCollections[i]??0} onChange={(n)=>setProjectedValue(i,n)} suffix="Cr" />
-            </div>
-          ))}
-        </div>
-        <p className="text-[10px] text-text-muted">
-          Actuals in the chart = sum of all <strong className="text-text-primary">Actual</strong> cells in the input matrix ({fmt(metrics.totalActuals)}).
-        </p>
-        <div className="h-[300px] w-full">
+        <div className="h-[240px] sm:h-[320px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             {projections.chartMode === "bar" ? (
-              <BarChart data={timeline} margin={{ top:4, right:16, left:0, bottom:0 }}>
+              <BarChart data={plData} margin={{ top:8, right:24, left:0, bottom:0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="year" tick={{ fontSize:11, fill:"#9CA3AF" }} />
-                <YAxis domain={[0,yMax]} tickFormatter={(v)=>`₹${(v as number).toFixed(0)}`} tick={{ fontSize:11, fill:"#9CA3AF" }} width={52} />
-                {/* Profit/loss zones */}
-                {metrics.breakEven > 0 && <ReferenceArea y1={0} y2={metrics.breakEven} fill={C.red}   fillOpacity={0.04} ifOverflow="hidden" />}
-                {metrics.breakEven > 0 && <ReferenceArea y1={metrics.breakEven} y2={yMax} fill={C.green} fillOpacity={0.04} ifOverflow="hidden" />}
-                <Tooltip content={<ChartTip />} />
-                <Legend wrapperStyle={{ fontSize:11 }} />
-                <Bar dataKey="Budget"     fill={C.blue}  radius={[4,4,0,0]} maxBarSize={40} />
-                <Bar dataKey="Projection" fill={C.green} radius={[4,4,0,0]} maxBarSize={40} />
-                <Bar dataKey="Actual"     fill={C.gold}  radius={[4,4,0,0]} maxBarSize={40} />
+                <XAxis dataKey="name" tick={{ fontSize:10, fill:"#9CA3AF" }} />
+                <YAxis
+                  domain={[0, (dataMax: number) => Math.max(dataMax, metrics.breakEven, 1) * 1.12]}
+                  tickFormatter={(v) => `₹${crFmt.format(v as number)}`}
+                  tick={{ fontSize:11, fill:"#9CA3AF" }} width={56}
+                />
+                <Tooltip content={({ active, payload }) => {
+                  if (!active || !payload?.length) return null;
+                  const p = payload[0];
+                  const d = p.payload as typeof plData[number];
+                  return (
+                    <div className="px-3 py-2.5 rounded-xl bg-surface border border-border shadow-xl text-xs min-w-[200px]">
+                      <p className="font-bold text-text-primary mb-1">{d.name}</p>
+                      <div className="flex justify-between gap-4">
+                        <span className="text-text-muted">Value</span>
+                        <span className="font-bold" style={{ color: d.fill }}>{fmt(d.value)}</span>
+                      </div>
+                      <p className="text-[10px] text-text-muted mt-1">{d.desc}</p>
+                    </div>
+                  );
+                }} />
+                <Bar dataKey="value" radius={[6,6,0,0]} maxBarSize={72} label={false}>
+                  {plData.map((d, i) => <Cell key={i} fill={d.fill} />)}
+                </Bar>
                 <ReferenceLine y={metrics.breakEven} stroke={C.red} strokeDasharray="4 3"
-                  label={{ value:"Break-even", fill:C.red, fontSize:10, position:"right" }} />
+                  label={{ value:`Break-even ${fmt(metrics.breakEven)}`, fill:C.red, fontSize:10, position:"insideTopRight" }} />
               </BarChart>
             ) : (
-              <LineChart data={timeline} margin={{ top:4, right:16, left:0, bottom:0 }}>
+              <LineChart data={timeline.rows} margin={{ top:4, right:16, left:0, bottom:0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="rgba(255,255,255,0.06)" />
-                <XAxis dataKey="year" tick={{ fontSize:11, fill:"#9CA3AF" }} />
-                <YAxis domain={[0,yMax]} tickFormatter={(v)=>`₹${(v as number).toFixed(0)}`} tick={{ fontSize:11, fill:"#9CA3AF" }} width={52} />
-                {metrics.breakEven > 0 && <ReferenceArea y1={0} y2={metrics.breakEven} fill={C.red}   fillOpacity={0.04} ifOverflow="hidden" />}
-                {metrics.breakEven > 0 && <ReferenceArea y1={metrics.breakEven} y2={yMax} fill={C.green} fillOpacity={0.04} ifOverflow="hidden" />}
+                <XAxis dataKey="period" tick={{ fontSize:11, fill:"#9CA3AF" }} />
+                <YAxis domain={[0,yMax]} tickFormatter={(v)=>`₹${crFmt.format(v as number)}`} tick={{ fontSize:11, fill:"#9CA3AF" }} width={56} />
                 <Tooltip content={<ChartTip />} />
                 <Legend wrapperStyle={{ fontSize:11 }} />
-                <Line dataKey="Budget"     stroke={C.blue}  strokeWidth={2.5} dot={{ r:3 }} />
-                <Line dataKey="Projection" stroke={C.green} strokeWidth={2.5} dot={{ r:3 }} />
-                <Line dataKey="Actual"     stroke={C.gold}  strokeWidth={2.5} dot={{ r:3 }} />
-                <ReferenceLine y={metrics.breakEven} stroke={C.red} strokeDasharray="4 3"
-                  label={{ value:"Break-even", fill:C.red, fontSize:10, position:"right" }} />
+                <Line dataKey="Budget"     name="Budget Expenses (run-rate)" stroke={C.orange} strokeWidth={2.5} dot={{ r:3 }} />
+                <Line dataKey="Projection" name="Projected Revenue"          stroke={C.green}  strokeWidth={2.5} dot={{ r:3 }} />
+                <Line dataKey="Actual"     name="Actual Expenses (run-rate)" stroke={C.red}    strokeWidth={2.5} dot={{ r:3 }} />
+                <ReferenceLine y={metrics.breakEven} stroke={C.gold} strokeDasharray="4 3"
+                  label={{ value:"Break-even", fill:C.gold, fontSize:10, position:"right" }} />
+                {timeline.breakEvenX && (
+                  <ReferenceLine x={timeline.breakEvenX} stroke={C.purple} strokeDasharray="3 3"
+                    label={{ value:`BE: ${timeline.breakEvenX}`, fill:C.purple, fontSize:10, position:"top" }} />
+                )}
               </LineChart>
             )}
           </ResponsiveContainer>
         </div>
-        {/* Zone legend */}
-        <div className="flex items-center gap-4 text-[10px] text-text-muted">
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background:`${C.green}30`, border:`1px solid ${C.green}40` }}/> Profit zone (above break-even)</span>
-          <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded" style={{ background:`${C.red}30`,   border:`1px solid ${C.red}40` }}/> Loss zone (below break-even)</span>
+        <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[9px] sm:text-[10px] text-text-muted">
+          {projections.chartMode === "bar" ? (
+            <>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: C.green }} />Budget Revenue</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: C.cyan }} />Projected Revenue</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: C.blue }} />Collections</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: C.orange }} />Budget Expenses</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: C.red }} />Actual Expenses</span>
+              <span className="flex items-center gap-1"><span className="inline-block w-5 border-t-2 border-dashed shrink-0" style={{ borderColor: C.red }} />Break-even</span>
+            </>
+          ) : (
+            <span>Period timeline — projections vs run-rate expenses. Purple line = break-even period.</span>
+          )}
         </div>
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 7. COMPOSITION PIES                                               */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="composition" title="Budget & Revenue Composition" accent={C.purple} icon={Layers}
-        description="Phase-level budget breakdown and revenue split.">
+      <SCard id="composition" title="Expense & revenue composition" accent={C.purple} icon={Layers}
+        description="Phase-level expense budgets and gross revenue split (from collections).">
         <div className="grid lg:grid-cols-2 gap-8">
           {[
-            { label:"Budget by Phase", data:budgetPie,  pal:PIE_PAL },
+            { label:"Expenses by phase", data:budgetPie,  pal:PIE_PAL },
             { label:"Revenue Split",   data:revenuePie, pal:[C.blue,C.cyan,C.green,C.gold] },
           ].map(({ label, data, pal }) => (
             <div key={label}>
@@ -1322,81 +1684,91 @@ export default function FinancialPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 8. EFFICIENCY                                                     */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="efficiency" title="Marketing Efficiency" accent={effColor} icon={Gauge}
-        description="Gross Collections ÷ Marketing Budget. Measures return on marketing spend.">
-        <div className="grid sm:grid-cols-3 gap-4 items-center">
-          <div className="rounded-2xl p-5 flex flex-col items-center gap-1 border"
-            style={{ background:`${effColor}10`, borderColor:`${effColor}30` }}>
-            <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Efficiency Ratio</div>
-            <div className="text-4xl font-black" style={{ color: effColor }}>{fmtX(metrics.efficiencyRatio)}</div>
-            <div className="text-xs font-bold" style={{ color: effColor }}>{metrics.efficiencyLabel}</div>
+      <SCard id="efficiency" title="Marketing efficiency" accent={metrics.totalMarketingBudget===0?C.muted:effColor} icon={Gauge}
+        description="Total Budget Revenue ÷ Marketing expense (matrix). Measures budgeted yield on marketing spend.">
+        {metrics.totalMarketingBudget === 0 ? (
+          <div className="flex flex-col items-center gap-3 py-4 text-center">
+            <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background:`${C.muted}18`, border:`1px solid ${C.muted}30` }}>
+              <Gauge className="w-6 h-6" style={{ color: C.muted }} />
+            </div>
+            <div>
+              <p className="text-sm font-bold text-text-muted">Efficiency not available</p>
+              <p className="text-xs text-text-muted mt-1">No marketing expense found in the matrix. Add a marketing budget to compute the efficiency ratio.</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+              <span>Total Budget Revenue: <strong className="text-text-primary">{fmt(metrics.totalBudgetRevenue)}</strong></span>
+              <span>Marketing Spend: <strong className="text-red-400">₹0.00 Cr</strong></span>
+            </div>
           </div>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between"><span className="text-text-muted">Collections</span><span className="font-bold text-text-primary">{fmt(revenue.totalCollections)}</span></div>
-            <div className="flex justify-between"><span className="text-text-muted">Marketing budget (matrix)</span><span className="font-bold text-text-primary">{fmt(metrics.totalMarketingBudget)}</span></div>
+        ) : (
+          <div className="grid sm:grid-cols-3 gap-4 items-center">
+            <div className="rounded-2xl p-5 flex flex-col items-center gap-1 border transition-all hover:shadow-md"
+              style={{ background:`${effColor}10`, borderColor:`${effColor}30` }}>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-text-muted">Efficiency Ratio</div>
+              <div className="text-4xl font-black tabular-nums" style={{ color: effColor }}>{fmtX(metrics.efficiencyRatio)}</div>
+              <div className="text-xs font-bold" style={{ color: effColor }}>{metrics.efficiencyLabel}</div>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between gap-3">
+                <span className="text-text-muted">Total budget revenue</span>
+                <span className="font-bold text-text-primary tabular-nums">{fmt(metrics.totalBudgetRevenue)}</span>
+              </div>
+              <div className="flex justify-between gap-3">
+                <span className="text-text-muted">Marketing expense (matrix)</span>
+                <span className="font-bold text-text-primary tabular-nums">{fmt(metrics.totalMarketingBudget)}</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <BandRow ratio={metrics.efficiencyRatio} threshold={2}  label="< 2×" desc="Over-spending"    color={C.red}   />
+              <BandRow ratio={metrics.efficiencyRatio} threshold={3}  label="2–3×" desc="Average"          color={C.gold}  />
+              <BandRow ratio={metrics.efficiencyRatio} threshold={99} label="> 3×" desc="Highly efficient" color={C.green} />
+            </div>
           </div>
-          <div className="space-y-2">
-            <BandRow ratio={metrics.efficiencyRatio} threshold={2}  label="< 2×" desc="Over-spending"    color={C.red}   />
-            <BandRow ratio={metrics.efficiencyRatio} threshold={3}  label="2–3×" desc="Average"          color={C.gold}  />
-            <BandRow ratio={metrics.efficiencyRatio} threshold={99} label="> 3×" desc="Highly efficient" color={C.green} />
-          </div>
-        </div>
+        )}
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 9. NPV & IRR                                                      */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="npv" title="NPV & IRR" accent={C.green} icon={Calculator}
-        description="Cash flows and period settings. Discount rate and required return are set in the sticky inputs above.">
-        <p className="text-[10px] text-text-muted mb-3">
-          Using discount <strong className="text-text-primary">{fmtPct(npvConfig.discountRate)}</strong> and required return{" "}
-          <strong className="text-text-primary">{fmtPct(npvConfig.requiredReturn)}</strong> (annual).
-        </p>
-        <div>
-          {/* Period selector row */}
-          <div className="flex items-center justify-between mb-3">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">
-              Cash Flows ({PERIOD_PLURAL[cashFlowPeriod]} 1–5)
-            </p>
-            <div className="flex items-center gap-2">
-              <span className="text-[11px] text-text-muted">Period:</span>
-              <select
-                value={cashFlowPeriod}
-                onChange={(e) => setCashFlowPeriod(e.target.value as "year" | "month" | "week")}
-                className="h-8 px-3 pr-8 rounded-xl border border-border bg-surface-2 text-xs text-text-primary focus:outline-none focus:ring-2 focus:ring-accent/25 transition-all appearance-none cursor-pointer"
-              >
-                <option value="year">📅 Year</option>
-                <option value="month">🗓️ Month</option>
-                <option value="week">📆 Week</option>
-              </select>
-            </div>
+      <SCard id="npv" title="NPV & IRR Results" accent={C.green} icon={Calculator}
+        description="Computed from cash flows, discount rate, and required return entered in the Financial Inputs section above.">
+        <div className="flex flex-wrap gap-3 text-[11px] mb-4">
+          <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
+            <span className="text-text-muted">Discount rate:</span>
+            <strong className="ml-1.5 text-text-primary">{fmtPct(npvConfig.discountRate)}</strong>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-            {npvConfig.cashFlows.map((cf, i) => (
-              <NumField key={i} label={`${PERIOD_LABEL[cashFlowPeriod]} ${i + 1}`} value={cf} onChange={(n) => setCashFlow(i, n)} suffix="Cr" />
-            ))}
+          <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
+            <span className="text-text-muted">Required return:</span>
+            <strong className="ml-1.5 text-text-primary">{fmtPct(npvConfig.requiredReturn)}</strong>
+          </div>
+          <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
+            <span className="text-text-muted">Cash flow period:</span>
+            <strong className="ml-1.5 text-text-primary capitalize">{cashFlowPeriod}ly</strong>
           </div>
           {cashFlowPeriod !== "year" && (
-            <p className="text-[10px] text-text-muted mt-2.5 flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-2 border border-border/50">
-              <Info className="w-3 h-3 shrink-0 text-accent" />
-              Annual discount rate <strong className="text-text-primary mx-1">{fmtPct(npvConfig.discountRate)}</strong>
-              auto-converted to {cashFlowPeriod}ly rate
-              <strong className="text-text-primary mx-1">{fmtPct(periodRate * 100, 4)}</strong>.
-              IRR is annualised for comparison.
-            </p>
+            <div className="rounded-xl border border-border/60 px-3 py-2 bg-surface-2/60">
+              <span className="text-text-muted">Effective {cashFlowPeriod}ly rate:</span>
+              <strong className="ml-1.5 text-text-primary">{fmtPct(periodRate * 100, 4)}</strong>
+            </div>
           )}
         </div>
         <div className="grid sm:grid-cols-2 gap-4">
-          <MetricBox label="NPV" value={fmt(periodNpv)}
+          <MetricBox label="NPV (Net Present Value)" value={fmtSigned(periodNpv)}
             color={periodNpv >= 0 ? C.green : C.red}
-            guidance="Accept project if NPV > 0"
+            guidance="Accept project if NPV > 0. Negative NPV means project destroys value at this discount rate."
+            tooltip="NPV = sum of discounted future cash flows minus initial actual investment. Formula: Σ(CF_t / (1+r)^t) − Total Actual Expenses."
             icon={periodNpv >= 0 ? TrendingUp : TrendingDown} />
-          <MetricBox label="IRR (annualised)"
+          <MetricBox label="IRR — annualised"
             value={periodIrr == null ? "Insufficient data" : `${periodIrr.toFixed(2)}%`}
             color={periodIrr == null ? C.muted : periodIrr >= npvConfig.requiredReturn ? C.green : C.red}
-            guidance={`Accept if IRR > Required Return (${fmtPct(npvConfig.requiredReturn)})`}
+            guidance={`Accept if IRR > Required Return (${fmtPct(npvConfig.requiredReturn)}). ${periodIrr != null && periodIrr >= npvConfig.requiredReturn ? "✓ Hurdle cleared." : "✗ Below hurdle."}`}
+            tooltip="IRR = discount rate at which NPV = 0. Compared against Required Return (hurdle rate) to decide project viability."
             icon={periodIrr != null && periodIrr >= npvConfig.requiredReturn ? TrendingUp : TrendingDown} />
         </div>
+        <p className="text-[10px] text-text-muted flex items-center gap-1.5 px-3 py-2 rounded-lg bg-surface-2 border border-border/50">
+          <Info className="w-3 h-3 shrink-0 text-accent" />
+          Cash flows and rates are configured in the <strong className="text-text-primary mx-1">Financial Inputs</strong> section above. All inputs produce deterministic outputs — same values always produce the same NPV and IRR.
+        </p>
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -1433,15 +1805,44 @@ export default function FinancialPage() {
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 11. ROI GAUGE                                                     */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="roi" title="ROI Gauge" accent={metrics.roi>=0?C.green:C.red} icon={Gauge}
-        description="Return on Investment based on Net Revenue vs Total Investment.">
+      <SCard id="roi" title="ROI Gauge" accent={metrics.totalActualInvestment===0?C.muted:metrics.roi>=0?C.green:C.red} icon={Gauge}
+        description="ROI % = Net Revenue ÷ Total Actual Expenses × 100. Net Revenue = Budget Revenue − Actual Expenses.">
+        {metrics.totalActualInvestment === 0 && (
+          <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-yellow-500/8 border border-yellow-500/25 text-xs text-yellow-400 mb-2">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+            ROI not defined — Total Actual Expenses is zero. Enter actual expense values in the matrix to enable ROI calculation.
+          </div>
+        )}
         <div className="max-w-sm mx-auto">
-          <ROIGauge value={metrics.roi} />
+          <ROIGauge value={metrics.totalActualInvestment === 0 ? 0 : metrics.roi} />
         </div>
         <div className="grid sm:grid-cols-3 gap-3 mt-2">
-          <MetricBox label="Total Investment" value={fmt(metrics.totalInvestment)} color={C.blue} />
-          <MetricBox label="Net Revenue"       value={fmt(metrics.netRevenue)}      color={C.cyan} />
-          <MetricBox label="ROI"               value={fmtPct(metrics.roi)}          color={metrics.roi>=0?C.green:C.red} />
+          <MetricBox label="Total Actual Expenses" value={fmt(metrics.totalActualInvestment)} color={C.blue}
+            tooltip="Meaning: Capital actually deployed across all expense categories.&#10;Formula: Σ of all actual cells in the expense matrix.&#10;Usage: Denominator for ROI and Break-even calculations." />
+          <MetricBox
+            label="Net Revenue"
+            value={fmtSigned(metrics.netRevenue)}
+            color={metrics.netRevenue > 0 ? C.green : metrics.netRevenue < 0 ? C.red : C.muted}
+            badge={
+              metrics.netRevenue > 0
+                ? <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-green-500/15 text-green-400 border border-green-500/25 uppercase">Profit</span>
+                : metrics.netRevenue < 0
+                ? <span className="px-1.5 py-0.5 rounded text-[9px] font-black bg-red-500/15 text-red-400 border border-red-500/25 uppercase">Loss</span>
+                : null
+            }
+            tooltip="Meaning: Net return after deducting all actual expenses from budgeted revenue.&#10;Formula: Total Budget Revenue − Total Actual Expenses.&#10;Usage: Core P&L result. Positive = profit; negative = loss."
+          />
+          <MetricBox
+            label="ROI %"
+            value={metrics.totalActualInvestment === 0 ? "N/A" : fmtPct(metrics.roi)}
+            color={metrics.totalActualInvestment === 0 ? C.muted : metrics.roi>=0?C.green:C.red}
+            guidance={metrics.totalActualInvestment === 0 ? "Enter actual expenses to compute ROI" : undefined}
+            tooltip={
+              metrics.totalActualInvestment === 0
+                ? "ROI not defined when actual expenses are zero."
+                : "Meaning: Percentage return generated per rupee of actual spend.&#10;Formula: (Net Revenue ÷ Total Actual Expenses) × 100.&#10;Usage: Higher is better. >100% = project returned more than it cost."
+            }
+          />
         </div>
       </SCard>
 

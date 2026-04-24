@@ -604,32 +604,88 @@ export function ProjectionPanel({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-                Historical data influence
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={input.historicalBoost}
-                onChange={(e) => set("historicalBoost", Number(e.target.value))}
-              />
+          {/* Rating bars (1–10) */}
+          <div className="space-y-4">
+            {/* Historical Data Influence */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1">
+                  Historical Data Influence
+                  <span
+                    title="How strongly the historical film dataset shapes this projection. Higher = dataset drives more of the forecast (40% weight at max). Lower = factor model dominates."
+                    className="cursor-help opacity-50 hover:opacity-100"
+                  >
+                    <Info className="w-3 h-3" />
+                  </span>
+                </label>
+                <span className="text-xs font-black tabular-nums"
+                  style={{ color: input.historicalBoost <= 0.3 ? COLORS.red : input.historicalBoost <= 0.6 ? COLORS.gold : COLORS.green }}>
+                  {Math.round(input.historicalBoost * 10)}/10
+                </span>
+              </div>
+              <div className="flex gap-1">
+                {Array.from({ length: 10 }, (_, i) => {
+                  const rating = (i + 1) / 10;
+                  const active = input.historicalBoost >= rating - 0.05;
+                  const col = i < 3 ? COLORS.red : i < 6 ? COLORS.gold : COLORS.green;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => set("historicalBoost", rating)}
+                      className="flex-1 h-3 rounded-sm transition-all duration-150"
+                      style={{ background: active ? col : "rgba(var(--border-rgb,100,100,120),0.3)" }}
+                      title={`Set Historical Influence to ${i + 1}/10`}
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex justify-between text-[9px] text-text-muted">
+                <span style={{ color: COLORS.red }}>Low</span>
+                <span>Dataset-driven</span>
+                <span style={{ color: COLORS.green }}>High</span>
+              </div>
             </div>
-            <div className="flex flex-col gap-1.5">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted">
-                Benchmark match
-              </label>
-              <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={input.benchmarkMatch}
-                onChange={(e) => set("benchmarkMatch", Number(e.target.value))}
-              />
+
+            {/* Benchmark Match */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-[10px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1">
+                  Benchmark Match
+                  <span
+                    title="How well this film's parameters align with high-performing benchmark films in the dataset. Higher = stronger similarity to proven hits, boosting multiplier confidence."
+                    className="cursor-help opacity-50 hover:opacity-100"
+                  >
+                    <Info className="w-3 h-3" />
+                  </span>
+                </label>
+                <span className="text-xs font-black tabular-nums"
+                  style={{ color: input.benchmarkMatch <= 0.3 ? COLORS.red : input.benchmarkMatch <= 0.6 ? COLORS.gold : COLORS.green }}>
+                  {Math.round(input.benchmarkMatch * 10)}/10
+                </span>
+              </div>
+              <div className="flex gap-1">
+                {Array.from({ length: 10 }, (_, i) => {
+                  const rating = (i + 1) / 10;
+                  const active = input.benchmarkMatch >= rating - 0.05;
+                  const col = i < 3 ? COLORS.red : i < 6 ? COLORS.gold : COLORS.green;
+                  return (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => set("benchmarkMatch", rating)}
+                      className="flex-1 h-3 rounded-sm transition-all duration-150"
+                      style={{ background: active ? col : "rgba(var(--border-rgb,100,100,120),0.3)" }}
+                      title={`Set Benchmark Match to ${i + 1}/10`}
+                    />
+                  );
+                })}
+              </div>
+              <div className="flex justify-between text-[9px] text-text-muted">
+                <span style={{ color: COLORS.red }}>Poor match</span>
+                <span>Benchmark similarity</span>
+                <span style={{ color: COLORS.green }}>Strong match</span>
+              </div>
             </div>
           </div>
 
@@ -640,6 +696,9 @@ export function ProjectionPanel({
               onChange={(e) => set("exceptionalMovie", e.target.checked)}
             />
             Exceptional movie boost
+            <span title="Applies a 1.4× multiplier cap boost for word-of-mouth driven blockbusters." className="cursor-help opacity-50 hover:opacity-100">
+              <Info className="w-3 h-3" />
+            </span>
           </label>
         </div>
 
@@ -848,13 +907,23 @@ export function ProjectionPanel({
         </div>
       )}
 
+      {/* ── Data consistency note ── */}
+      <div className="flex items-start gap-2 rounded-xl px-4 py-3"
+        style={{ background: "rgba(0,194,224,0.06)", border: "1px solid rgba(0,194,224,0.2)" }}>
+        <Info className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: COLORS.cyan }} />
+        <p className="text-[10px] leading-relaxed text-text-muted">
+          <span className="font-semibold text-text-secondary">Deterministic model: </span>
+          Projection uses a fixed historical dataset. <span className="font-semibold text-text-primary">Same inputs always produce same results</span> — no randomness, no AI variance. Historical Data Influence and Benchmark Match sliders control how much the dataset shapes the multiplier vs the factor model.
+        </p>
+      </div>
+
       {/* ── Disclaimer ── */}
       <div className="flex items-start gap-2 rounded-xl px-4 py-3"
         style={{ background: "rgba(245,158,11,0.06)", border: "1px solid rgba(245,158,11,0.2)" }}>
         <AlertTriangle className="w-3.5 h-3.5 mt-0.5 flex-shrink-0" style={{ color: COLORS.gold }} />
         <p className="text-[10px] leading-relaxed text-text-muted">
           <span className="font-semibold text-text-secondary">Disclaimer: </span>
-          These projections are AI-based estimates derived from weighted statistical factors and are{" "}
+          These projections are estimates derived from weighted statistical factors and are{" "}
           <span className="font-semibold">not guaranteed outcomes</span>. Actual box-office results depend
           on market conditions, critical reception, competition, and other unpredictable variables.
           Use this tool for planning purposes only.

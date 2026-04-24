@@ -59,8 +59,15 @@ export async function exportAnalyseReportPDF(
   }
   step(4);
 
-  heading("Insights", 12);
-  report.insights.forEach((s) => body(`• ${s}`));
+  heading("Risk & Improvement", 12);
+  const allInsights = [
+    ...report.insights.plotHoles.map(s => `[Plot hole] ${s}`),
+    ...report.insights.pacingIssues.map(s => `[Pacing] ${s}`),
+    ...report.insights.weakCharacters.map(s => `[Character] ${s}`),
+    ...report.insights.repetitiveDialogue.map(s => `[Dialogue] ${s}`),
+  ];
+  if (allInsights.length === 0) body("No major issues detected.");
+  else allInsights.forEach((s) => body(`• ${s}`));
   step(4);
 
   heading("Most impactful scene", 12);

@@ -3,6 +3,8 @@ export { AnalyseDashboardSkeleton } from "./AnalyseDashboardSkeleton";
 export { MetricCardsSection } from "./MetricCardsSection";
 export { ImprovementTracker } from "./ImprovementTracker";
 export { SimilarStories } from "./SimilarStories";
+export { EmotionalTimelineSection } from "./EmotionalTimelineSection";
+export { EmotionDistributionSection } from "./EmotionDistributionSection";
 export { CharacterAnalysisSection } from "./CharacterAnalysisSection";
 export { DialogueAnalysisCard } from "./DialogueAnalysisCard";
 export { InsightsSection } from "./InsightsSection";

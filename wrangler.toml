@@ -2,6 +2,7 @@
 # Built with OpenNext.js (https://opennext.js.org/cloudflare)
 
 name = "scriptmind-ai"
+account_id = "e6f39e03e901ca587adeacc8fdaa35ca"
 main = ".open-next/worker.js"
 compatibility_date = "2025-04-01"
 compatibility_flags = ["nodejs_compat"]
@@ -11,3 +12,4 @@ assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
 [vars]
 NEXT_PUBLIC_APP_URL = "https://scriptmind-ai.workers.dev"
+NEXT_PUBLIC_ANALYSE_API_URL = "https://tenthdimensions-scriptmind-backend.hf.space"

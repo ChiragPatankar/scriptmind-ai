@@ -63,7 +63,7 @@ export function computeDecision(p: DecisionParams): DecisionSummary {
     if (roi < 0)
       reasons.push(`Negative ROI (${f1(roi)}%) — investment unlikely to recoup`);
     if (efficiencyRatio > 0 && efficiencyRatio < 2)
-      reasons.push(`Inefficient marketing at ${f1(efficiencyRatio, 2)}× — collections lag spending`);
+      reasons.push(`Inefficient marketing at ${f1(efficiencyRatio, 2)}× — budget revenue lags marketing spend`);
     if (reasons.length === 0)
       reasons.push("Multiple financial indicators are outside acceptable thresholds");
     return {
@@ -122,13 +122,15 @@ export interface InsightParams {
   projected:        number;   // ₹ Cr (total projection)
   week1:            number;   // ₹ Cr
   breakEven:        number;   // ₹ Cr
-  totalCollections: number;   // ₹ Cr (actual/entered)
+  /** Budgeted top-line revenue (Finance Studio input). */
+  totalBudgetRevenue: number;
+  totalCollections: number;   // ₹ Cr (gross collections)
 }
 
 export function generateInsights(p: InsightParams): FinancialInsight[] {
   const {
     npv, irr, requiredReturn, roi, efficiencyRatio,
-    openingWeekend, projected, week1, breakEven, totalCollections,
+    openingWeekend, projected, week1, breakEven, totalBudgetRevenue,
   } = p;
 
   const items: FinancialInsight[] = [];
@@ -138,13 +140,13 @@ export function generateInsights(p: InsightParams): FinancialInsight[] {
     items.push({
       type:   "warning",
       title:  "Inefficient Marketing Spend",
-      detail: `Collections-to-marketing ratio is only ${f1(efficiencyRatio, 2)}×. Consider reducing P&A or expanding release scope to improve returns.`,
+      detail: `Budget revenue-to-marketing ratio is only ${f1(efficiencyRatio, 2)}×. Consider reducing P&A or expanding release scope to improve returns.`,
     });
   } else if (efficiencyRatio >= 3) {
     items.push({
       type:   "positive",
       title:  "Strong Marketing ROI",
-      detail: `Marketing efficiency of ${f1(efficiencyRatio, 2)}× is excellent. Budget allocation appears well-optimised.`,
+      detail: `Budget revenue vs marketing spend (${f1(efficiencyRatio, 2)}×) is excellent. Allocation appears well-optimised.`,
     });
   }
 
@@ -185,11 +187,11 @@ export function generateInsights(p: InsightParams): FinancialInsight[] {
   }
 
   // Collections below break-even
-  if (totalCollections > 0 && breakEven > 0 && totalCollections < breakEven) {
+  if (totalBudgetRevenue > 0 && breakEven > 0 && totalBudgetRevenue < breakEven) {
     items.push({
       type:   "warning",
-      title:  "Collections Below Break-even",
-      detail: `Current total collections (₹${totalCollections.toFixed(1)} Cr) are ₹${(breakEven - totalCollections).toFixed(1)} Cr short of break-even (₹${breakEven.toFixed(1)} Cr).`,
+      title:  "Budget Revenue Below Break-even",
+      detail: `Total budget revenue (₹${totalBudgetRevenue.toFixed(1)} Cr) is ₹${(breakEven - totalBudgetRevenue).toFixed(1)} Cr short of the break-even threshold (₹${breakEven.toFixed(1)} Cr).`,
     });
   }
 

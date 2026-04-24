@@ -2,47 +2,16 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Sparkles, Plus, Copy, Download, RefreshCw, User } from "lucide-react";
+import { MessageSquare, Sparkles, Plus, Copy, Download, RefreshCw, User, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { GeneratedDialogueLine } from "@/lib/gemini-api";
 
 const moodOptions = ["Intense", "Romantic", "Comedic", "Emotional", "Dramatic", "Philosophical", "Angry", "Nostalgic"];
 const languageOptions = ["Hindi", "English", "Hinglish"] as const;
 const styleOptions = ["Classical", "Modern", "Street Slang", "Poetic", "Action-Packed"];
-
-const mockDialogue = [
-  {
-    character: "ARJUN",
-    text: "Zindagi aur maut ke beech mein, sirf ek cheez hoti hai — choice.",
-    emotion: "Intense",
-    direction: "(staring at the horizon, rain falling)",
-  },
-  {
-    character: "MEERA",
-    text: "Choice? Jab zamana hi tujhe rok le, toh choice kahan bachti hai?",
-    emotion: "Emotional",
-    direction: "(voice trembling)",
-  },
-  {
-    character: "ARJUN",
-    text: "Tab bhi bachti hai. Ek lamha hota hai... ek heartbeat... jab sab kuch badal sakta hai.",
-    emotion: "Philosophical",
-    direction: "(turns to face her slowly)",
-  },
-  {
-    character: "MEERA",
-    text: "Aur agar woh lamha nikal jaaye?",
-    emotion: "Quiet desperation",
-  },
-  {
-    character: "ARJUN",
-    text: "Tab agle lamhe ke liye jeena.",
-    emotion: "Resolute",
-    direction: "(a small, sad smile)",
-  },
-];
 
 type Language = typeof languageOptions[number];
 
@@ -53,8 +22,10 @@ export default function DialoguePage() {
   const [mood, setMood] = useState("Intense");
   const [language, setLanguage] = useState<Language>("Hinglish");
   const [style, setStyle] = useState("Modern");
-  const [generated, setGenerated] = useState(false);
+  const [dialogue, setDialogue] = useState<GeneratedDialogueLine[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const addCharacter = () => {
     if (newChar.trim() && !characters.includes(newChar.toUpperCase())) {
@@ -63,13 +34,65 @@ export default function DialoguePage() {
     }
   };
 
-  const generate = () => {
+  const generate = async () => {
     setIsLoading(true);
-    setTimeout(() => {
+    setError(null);
+
+    try {
+      const res = await fetch("/api/dialogue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ characters, scene, mood, language, style }),
+      });
+
+      const data = await res.json() as GeneratedDialogueLine[] | { error?: string };
+
+      if (!res.ok) {
+        throw new Error((data as { error?: string }).error ?? `Request failed (${res.status})`);
+      }
+
+      setDialogue(data as GeneratedDialogueLine[]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setIsLoading(false);
-      setGenerated(true);
-    }, 2000);
+    }
   };
+
+  const copyDialogue = async () => {
+    const text = dialogue
+      .map((line) => {
+        const parts = [`${line.character}${line.emotion ? ` (${line.emotion})` : ""}`];
+        if (line.direction) parts.push(`  ${line.direction}`);
+        parts.push(line.text);
+        return parts.join("\n");
+      })
+      .join("\n\n");
+    await navigator.clipboard.writeText(text);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const exportDialogue = () => {
+    const header = `SCENE: ${scene}\nMOOD: ${mood} | LANGUAGE: ${language} | STYLE: ${style}\n${"─".repeat(60)}\n\n`;
+    const body = dialogue
+      .map((line) => {
+        const parts = [`${line.character}${line.emotion ? ` (${line.emotion})` : ""}`];
+        if (line.direction) parts.push(`  ${line.direction}`);
+        parts.push(`  ${line.text}`);
+        return parts.join("\n");
+      })
+      .join("\n\n");
+    const blob = new Blob([header + body], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "dialogue.txt";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const hasDialogue = dialogue.length > 0;
 
   return (
     <div>
@@ -240,15 +263,15 @@ export default function DialoguePage() {
                   <MessageSquare className="w-4 h-4 text-secondary" />
                   Generated Dialogue
                 </CardTitle>
-                {generated && (
+                {hasDialogue && (
                   <div className="flex items-center gap-2">
-                    <Button variant="ghost" size="icon-sm">
+                    <Button variant="ghost" size="icon-sm" onClick={generate} title="Regenerate">
                       <RefreshCw className="w-3.5 h-3.5" />
                     </Button>
-                    <Button variant="ghost" size="icon-sm">
-                      <Copy className="w-3.5 h-3.5" />
+                    <Button variant="ghost" size="icon-sm" onClick={copyDialogue} title="Copy">
+                      {copied ? <CheckCircle2 className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
                     </Button>
-                    <Button variant="ghost" size="icon-sm">
+                    <Button variant="ghost" size="icon-sm" onClick={exportDialogue} title="Download .txt">
                       <Download className="w-3.5 h-3.5" />
                     </Button>
                   </div>
@@ -257,7 +280,26 @@ export default function DialoguePage() {
             </CardHeader>
             <CardContent className="p-6">
               <AnimatePresence mode="wait">
-                {!generated ? (
+                {error ? (
+                  <motion.div
+                    key="error"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center h-80 text-center gap-4"
+                  >
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                      <AlertCircle className="w-8 h-8 text-red-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-text-primary mb-1">Generation Failed</p>
+                      <p className="text-sm text-text-muted max-w-xs leading-relaxed">{error}</p>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
+                      Try Again
+                    </Button>
+                  </motion.div>
+                ) : !hasDialogue ? (
                   <motion.div
                     key="empty"
                     initial={{ opacity: 0 }}
@@ -293,12 +335,12 @@ export default function DialoguePage() {
 
                     {/* Dialogue Lines */}
                     <div className="space-y-5">
-                      {mockDialogue.map((line, i) => (
+                      {dialogue.map((line, i) => (
                         <motion.div
                           key={i}
                           initial={{ opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.1, duration: 0.4 }}
+                          transition={{ delay: i * 0.08, duration: 0.4 }}
                         >
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-gradient-accent flex items-center justify-center flex-shrink-0 mt-1">
@@ -324,10 +366,22 @@ export default function DialoguePage() {
                     </div>
 
                     <div className="flex gap-3 pt-2">
-                      <Button variant="secondary" size="sm" className="flex-1" leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        className="flex-1"
+                        onClick={generate}
+                        loading={isLoading}
+                        leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                      >
                         Regenerate
                       </Button>
-                      <Button size="sm" className="flex-1" leftIcon={<Download className="w-3.5 h-3.5" />}>
+                      <Button
+                        size="sm"
+                        className="flex-1"
+                        onClick={exportDialogue}
+                        leftIcon={<Download className="w-3.5 h-3.5" />}
+                      >
                         Export
                       </Button>
                     </div>

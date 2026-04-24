@@ -2,51 +2,16 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PenTool, Sparkles, Film, Users, MapPin, Wand2, ChevronRight, CheckCircle2 } from "lucide-react";
+import { PenTool, Sparkles, Film, Users, MapPin, Wand2, ChevronRight, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import type { StoryOutline } from "@/lib/gemini-api";
 
 const genres = ["Romantic Drama", "Action Thriller", "Comedy", "Period Drama", "Crime", "Horror", "Sci-Fi", "Social Drama", "Family", "Heist"];
 const tones = ["Intense", "Light-Hearted", "Dark", "Inspiring", "Bittersweet", "Epic", "Quirky"];
 const settings = ["Mumbai", "Delhi", "Rajasthan", "Village India", "Abroad", "Flashback India", "Near Future"];
-
-const mockStoryOutline = {
-  title: "Ek Raat Mumbai Mein",
-  logline: "When a hotshot lawyer discovers her murdered client was innocent, she has one night to expose a political conspiracy — or become the next victim.",
-  acts: [
-    {
-      label: "Act I — Setup",
-      scenes: [
-        "Priya (35, brilliant criminal lawyer) wins a high-profile murder case. Her client is executed at dawn.",
-        "Late-night call from an unknown source: 'The man you defended was innocent. Check the photograph.'",
-        "The photograph shows Priya's mentor — the city's most trusted judge — at the crime scene.",
-      ],
-    },
-    {
-      label: "Act II — Confrontation",
-      scenes: [
-        "Priya digs deeper: shell companies, forged evidence, a network reaching the Chief Minister.",
-        "She's followed. Her apartment is searched. A journalist who helped her is found dead.",
-        "Confrontation with her mentor at the court: 'You were never meant to win that case.'",
-      ],
-    },
-    {
-      label: "Act III — Resolution",
-      scenes: [
-        "Priya leaks the evidence live on a midnight news broadcast from a friend's rooftop studio.",
-        "Armed men arrive — but so do hundreds of citizens alerted by the broadcast.",
-        "The judge is arrested at dawn, as Mumbai wakes up. Priya stands in the rain, finally still.",
-      ],
-    },
-  ],
-  characters: [
-    { name: "Priya Mehta", role: "Protagonist", arc: "Self-doubt → Moral courage" },
-    { name: "Justice Rao", role: "Antagonist", arc: "Respected figure → Exposed villain" },
-    { name: "Kabir", role: "Ally/Love Interest", arc: "Cynical journalist → Believer" },
-  ],
-};
 
 export default function CreateStoryPage() {
   const [title, setTitle] = useState("");
@@ -55,14 +20,33 @@ export default function CreateStoryPage() {
   const [tone, setTone] = useState("Intense");
   const [setting, setSetting] = useState("Mumbai");
   const [isGenerating, setIsGenerating] = useState(false);
-  const [generated, setGenerated] = useState(false);
+  const [storyOutline, setStoryOutline] = useState<StoryOutline | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const generate = () => {
+  const generate = async () => {
     setIsGenerating(true);
-    setTimeout(() => {
+    setError(null);
+    setStoryOutline(null);
+
+    try {
+      const res = await fetch("/api/story", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, premise, genre, tone, setting }),
+      });
+
+      const data = await res.json() as StoryOutline & { error?: string };
+
+      if (!res.ok) {
+        throw new Error(data.error ?? `Request failed (${res.status})`);
+      }
+
+      setStoryOutline(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
+    } finally {
       setIsGenerating(false);
-      setGenerated(true);
-    }, 3000);
+    }
   };
 
   return (
@@ -210,7 +194,7 @@ export default function CreateStoryPage() {
                   <PenTool className="w-5 h-5 text-gold" />
                   Story Outline
                 </CardTitle>
-                {generated && (
+                {storyOutline && (
                   <div className="flex items-center gap-2">
                     <Badge variant="success">
                       <CheckCircle2 className="w-3 h-3 mr-1" />
@@ -222,7 +206,26 @@ export default function CreateStoryPage() {
             </CardHeader>
             <CardContent className="p-6">
               <AnimatePresence mode="wait">
-                {!generated ? (
+                {error ? (
+                  <motion.div
+                    key="error"
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center h-80 text-center gap-4"
+                  >
+                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                      <AlertCircle className="w-8 h-8 text-red-400" />
+                    </div>
+                    <div>
+                      <p className="text-sm font-semibold text-text-primary mb-1">Generation Failed</p>
+                      <p className="text-sm text-text-muted max-w-xs leading-relaxed">{error}</p>
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
+                      Try Again
+                    </Button>
+                  </motion.div>
+                ) : !storyOutline ? (
                   <motion.div
                     key="empty"
                     className="flex flex-col items-center justify-center h-80 text-center"
@@ -244,17 +247,17 @@ export default function CreateStoryPage() {
                     {/* Title & Logline */}
                     <div>
                       <div className="flex items-center gap-3 mb-2">
-                        <h2 className="text-2xl font-black text-text-primary">{mockStoryOutline.title}</h2>
+                        <h2 className="text-2xl font-black text-text-primary">{storyOutline.title}</h2>
                         <Badge variant="warning">{genre}</Badge>
                       </div>
                       <p className="text-sm text-text-secondary italic leading-relaxed border-l-2 border-gold pl-4">
-                        &ldquo;{mockStoryOutline.logline}&rdquo;
+                        &ldquo;{storyOutline.logline}&rdquo;
                       </p>
                     </div>
 
                     {/* Three Acts */}
                     <div className="space-y-5">
-                      {mockStoryOutline.acts.map((act, i) => (
+                      {storyOutline.acts.map((act, i) => (
                         <motion.div
                           key={act.label}
                           initial={{ opacity: 0, y: 10 }}
@@ -284,7 +287,7 @@ export default function CreateStoryPage() {
                         Key Characters
                       </h3>
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {mockStoryOutline.characters.map((char) => (
+                        {storyOutline.characters.map((char) => (
                           <div key={char.name} className="p-3.5 rounded-xl bg-surface-2 border border-border">
                             <div className="text-sm font-bold text-text-primary">{char.name}</div>
                             <div className="text-xs text-accent mb-1.5">{char.role}</div>
@@ -295,7 +298,9 @@ export default function CreateStoryPage() {
                     </div>
 
                     <div className="flex gap-3">
-                      <Button variant="secondary" size="sm" className="flex-1">Save Project</Button>
+                      <Button variant="secondary" size="sm" className="flex-1" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
+                        Regenerate
+                      </Button>
                       <Button size="sm" className="flex-1" leftIcon={<Sparkles className="w-3.5 h-3.5" />}>
                         Expand to Full Script
                       </Button>
