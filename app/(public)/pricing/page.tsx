@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, type ElementType } from "react";
 import { motion } from "framer-motion";
 import { CheckCircle2, Lock, Zap, Star, Building2, BarChart3, Brain, ArrowRight, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -8,7 +8,40 @@ import Link from "next/link";
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
-const plans = [
+type PlanFeature = {
+  text: string;
+  included?: boolean;
+  locked?: boolean;
+  highlight?: boolean;
+  soon?: boolean;
+};
+
+type Plan = {
+  id: string;
+  name: string;
+  topBadge: string | null;
+  topBadgeStyle: string;
+  discountBadge: string | null;
+  isCustom: boolean;
+  monthlyPrice: number;
+  originalMonthlyPrice: number | null;
+  yearlyPrice: number;
+  originalYearlyPrice: number | null;
+  period: string;
+  description: string;
+  icon: ElementType;
+  accentColor: string;
+  glowColor: string;
+  borderColor: string;
+  cardBg: string;
+  highlighted: boolean;
+  aiLimits: { label: string; value: string }[];
+  features: PlanFeature[];
+  cta: string;
+  ctaHref: string;
+};
+
+const plans: Plan[] = [
   {
     id: "free",
     name: "Free",
@@ -149,7 +182,7 @@ const plans = [
     cta: "Contact Sales",
     ctaHref: "/support",
   },
-] as const;
+];
 
 const comparisonRows = [
   { feature: "Script Analysis / month", free: "2", basic: "15", pro: "50", enterprise: "High" },
