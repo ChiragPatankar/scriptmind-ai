@@ -30,6 +30,29 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
   },
 
+  async headers() {
+    return [
+      {
+        source: "/((?!_next/static|_next/image|favicon.ico|logo.png).*)",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "no-store, must-revalidate",
+          },
+        ],
+      },
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          {
+            key: "Cache-Control",
+            value: "public, max-age=31536000, immutable",
+          },
+        ],
+      },
+    ];
+  },
+
   webpack(config, { webpack }) {
     config.plugins.push(
       new webpack.DefinePlugin({
