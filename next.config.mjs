@@ -30,6 +30,15 @@ const nextConfig = {
     formats: ["image/avif", "image/webp"],
   },
 
+  webpack(config, { webpack }) {
+    config.plugins.push(
+      new webpack.DefinePlugin({
+        __name: "(fn => fn)",
+      })
+    );
+    return config;
+  },
+
   experimental: {
     // Tree-shake these packages so only used icons/components are bundled
     optimizePackageImports: [
