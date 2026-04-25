@@ -13,7 +13,7 @@ const PROTECTED_PREFIXES = [
   "/visualize",
 ];
 
-const AUTH_PAGES = ["/login", "/signup"];
+const AUTH_PAGES = ["/login", "/signup", "/forgot-password"];
 
 export async function middleware(request: NextRequest) {
   // Start with a plain pass-through response we'll mutate as needed.
