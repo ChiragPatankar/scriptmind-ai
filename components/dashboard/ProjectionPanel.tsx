@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   TrendingUp, TrendingDown, Zap, Calendar, Users, Star, Megaphone,
   Film, Clapperboard, AlertTriangle, RefreshCw, Info, ChevronDown,
-  Sparkles, BarChart2, Target, Rocket, MonitorPlay, Youtube,
+  Sparkles, BarChart2, Target, Rocket, MonitorPlay, PlayCircle,
   CheckCircle2, XCircle, Lightbulb, Loader2, Eye, Wifi,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -381,7 +381,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
       <div className="flex gap-2 flex-wrap">
         {(["theatrical", "ott", "youtube"] as Platform[]).map((p) => {
           const active = inputs.platform === p;
-          const icons  = { theatrical: Film, ott: MonitorPlay, youtube: Youtube };
+          const icons  = { theatrical: Film, ott: MonitorPlay, youtube: PlayCircle };
           const PIcon  = icons[p];
           return (
             <button
@@ -977,7 +977,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
                       Summary
                     </div>
                     <p className="text-xs font-semibold text-text-primary leading-relaxed">
-                      &ldquo;{result.summaryLine}&rdquo;
+                      {`"${result.summaryLine}"`}
                     </p>
                   </div>
                 </div>
