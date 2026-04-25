@@ -14,18 +14,20 @@ export default function DashboardLayout({
   const { sidebarCollapsed } = useUIStore();
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background overflow-x-hidden w-full">
       <Sidebar />
       <DashboardNavbar />
       <main
         className={cn(
-          "min-h-screen pt-16 transition-all duration-300",
+          "min-h-screen pt-16 transition-all duration-300 overflow-x-hidden",
           "pl-0",
           "md:pl-[68px]",
           !sidebarCollapsed && "md:pl-[240px]"
         )}
       >
-        <div className="mx-auto max-w-[1400px] p-4 pb-12 sm:p-6 sm:pb-14 lg:p-8 lg:pb-16">{children}</div>
+        <div className="w-full max-w-[1400px] mx-auto p-4 pb-12 sm:p-6 sm:pb-14 lg:p-8 lg:pb-16 overflow-x-hidden">
+          {children}
+        </div>
       </main>
     </div>
   );

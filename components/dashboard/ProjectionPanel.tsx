@@ -485,7 +485,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
       </div>
 
       {/* ── Top 4 metric cards ── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
         <MetricCard
           label="Final Revenue"
           display={<AnimatedNumber value={result.finalRevenue} />}
@@ -521,7 +521,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
       </div>
 
       {/* ── Inputs + Results grid ── */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1fr] gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full min-w-0">
 
         {/* ── Input panel ── */}
         <div className="rounded-2xl p-5 flex flex-col gap-4"
@@ -772,7 +772,8 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
             >
               <div className="px-5 pb-5">
                 <div className="h-px mb-4" style={{ background: "rgba(var(--border-rgb,100,100,120),0.3)" }} />
-                <table className="w-full text-xs">
+                <div className="overflow-x-auto -mx-1 px-1">
+                <table className="w-full text-xs min-w-[320px]">
                   <thead>
                     <tr className="text-text-muted font-bold uppercase tracking-widest text-[9px]">
                       <th className="text-left pb-2">Week</th>
@@ -809,6 +810,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
                     })}
                   </tbody>
                 </table>
+                </div>
               </div>
             </motion.div>
           )}
@@ -896,7 +898,8 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
             >
               <div className="px-5 pb-5">
                 <div className="h-px mb-4" style={{ background: "rgba(var(--border-rgb,100,100,120),0.3)" }} />
-                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-0.5 mb-2 text-[9px] font-bold uppercase tracking-widest text-text-muted">
+                <div className="overflow-x-auto -mx-1 px-1">
+                <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-3 gap-y-0.5 mb-2 text-[9px] font-bold uppercase tracking-widest text-text-muted min-w-[280px]">
                   <span>Factor</span>
                   <span className="text-right">Score</span>
                   <span className="text-right">Weight</span>
@@ -924,6 +927,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
                     </div>
                   );
                 })}
+                </div>
                 <div className="mt-4 pt-3 flex items-center justify-between"
                   style={{ borderTop: "1px solid rgba(var(--border-rgb,100,100,120),0.3)" }}>
                   <span className="text-xs font-bold text-text-primary">Composite Weighted Score</span>

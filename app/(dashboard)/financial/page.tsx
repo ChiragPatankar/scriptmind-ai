@@ -1260,7 +1260,7 @@ export default function FinancialPage() {
         >
       {/* ── KPI Strip ──────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.05 }}
-        className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
+        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-3 overflow-x-auto">
         <KpiChip label="Budget Revenue"   value={fmt(metrics.totalBudgetRevenue)} color={C.blue}   icon={TrendingUp}
           tooltip="Primary P&L input: top-line budgeted revenue target before any expenses." />
         <KpiChip label="Budget Expenses"  value={fmt(metrics.totalBudgetedExpenses)} color={C.purple} icon={Layers}

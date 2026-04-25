@@ -67,13 +67,13 @@ export default function DashboardNavbar() {
   return (
     <header
       className={cn(
-        "fixed top-0 right-0 z-20 h-16 border-b border-border",
+        "fixed top-0 right-0 z-20 h-16 border-b border-border overflow-hidden",
         "glass-strong transition-all duration-300",
         "left-0",
         sidebarCollapsed ? "md:left-[68px]" : "md:left-[240px]"
       )}
     >
-      <div className="flex items-center justify-between h-full px-4 sm:px-6 gap-2">
+      <div className="flex items-center justify-between h-full px-4 sm:px-6 gap-2 w-full min-w-0">
         {/* Hamburger + breadcrumb */}
         <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
           <button
