@@ -4,7 +4,7 @@ import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
-import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle, CheckCircle2 } from "lucide-react";
+import { Mail, Lock, Eye, EyeOff, LogIn, AlertCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase-browser";
@@ -32,7 +32,6 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState<string | null>(null);
 
   // Show callback errors (e.g. auth_failed from /auth/callback)
   useEffect(() => {
@@ -85,7 +84,7 @@ export default function LoginPage() {
     >
       <div className="mb-8">
         <h1 className="text-3xl font-black text-text-primary mb-2">Welcome back</h1>
-        <p className="text-text-muted">Sign in to your ScriptMind AI account.</p>
+          <p className="text-text-muted">Sign in to your ScriptMind AI account.</p>
       </div>
 
       {/* Google OAuth — primary CTA */}
@@ -116,17 +115,6 @@ export default function LoginPage() {
         >
           <AlertCircle className="w-4 h-4 flex-shrink-0" />
           {error}
-        </motion.div>
-      )}
-
-      {success && (
-        <motion.div
-          initial={{ opacity: 0, y: -6 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-green-500/10 border border-green-500/20 text-sm text-green-400 mb-4"
-        >
-          <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-          {success}
         </motion.div>
       )}
 

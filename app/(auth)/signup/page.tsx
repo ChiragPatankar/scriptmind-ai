@@ -2,7 +2,6 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Mail, Lock, Eye, EyeOff, User, UserPlus,
@@ -42,7 +41,6 @@ function passwordStrength(pw: string) {
 const strengthColors = ["bg-surface-3", "bg-red-500", "bg-gold", "bg-blue-400", "bg-secondary"];
 
 export default function SignupPage() {
-  const router = useRouter();
   const supabase = createClient();
 
   const [name, setName] = useState("");
