@@ -1037,7 +1037,7 @@ export function ProjectionPanel({ budgetSeed, scriptScoreSeed, hideHeader = fals
         {aiInsights.length === 0 && !aiError && !aiLoading && (
           <div className="px-5 pb-4 pt-2">
             <p className="text-[10px] text-text-muted opacity-70">
-              Click "Get AI Insights" for Gemini-powered strategic analysis.
+              Click &ldquo;Get AI Insights&rdquo; for Gemini-powered strategic analysis.
               Insights are generated once per projection and cached — no unnecessary API calls.
             </p>
           </div>
