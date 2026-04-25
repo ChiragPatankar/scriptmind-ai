@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// Pollinations.ai — free, no-auth FLUX/SD image generation
+// Pollinations.ai — free, no-auth FLUX image generation.
+// We return the URL directly so the browser fetches the image itself,
+// avoiding Cloudflare Worker's 30-second fetch timeout.
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
 
 interface VisualizeInput {
@@ -42,35 +44,13 @@ export async function POST(req: NextRequest) {
     const prompt = buildPrompt(body.scene.trim(), body.style, body.mood);
     const seed = Math.floor(Math.random() * 1_000_000);
 
-    // GET request — Pollinations returns the image as raw bytes
-    const url = `${POLLINATIONS_BASE}/${encodeURIComponent(prompt)}?model=flux&width=1024&height=576&seed=${seed}&nologo=true&enhance=true`;
+    // Build the Pollinations URL and return it — the browser loads the image directly.
+    // This avoids proxying a large binary through the Worker (which would time out).
+    const imageUrl = `${POLLINATIONS_BASE}/${encodeURIComponent(prompt)}?model=flux&width=1024&height=576&seed=${seed}&nologo=true`;
 
-    const imgRes = await fetch(url, {
-      method: "GET",
-      // Cloudflare Workers timeout: give Pollinations up to 60s
-      signal: AbortSignal.timeout(60_000),
-    });
-
-    if (!imgRes.ok) {
-      const errText = await imgRes.text().catch(() => "");
-      return NextResponse.json(
-        { error: `Image generation failed (${imgRes.status}): ${errText.slice(0, 200)}` },
-        { status: imgRes.status }
-      );
-    }
-
-    const buffer = await imgRes.arrayBuffer();
-    const base64 = Buffer.from(buffer).toString("base64");
-
-    return NextResponse.json({ images: [base64] });
+    return NextResponse.json({ imageUrl });
   } catch (err) {
-    if (err instanceof Error && err.name === "TimeoutError") {
-      return NextResponse.json(
-        { error: "Image generation timed out. Please try again." },
-        { status: 504 }
-      );
-    }
-    const message = err instanceof Error ? err.message : "Image generation failed.";
+    const message = err instanceof Error ? err.message : "Failed to build image request.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

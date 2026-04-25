@@ -29,22 +29,32 @@ const moodOptions = [
 ];
 
 interface GenerateResult {
-  images?: string[];
+  imageUrl?: string;
   error?: string;
 }
 
-function downloadImage(base64: string, filename: string) {
-  const link = document.createElement("a");
-  link.href = `data:image/png;base64,${base64}`;
-  link.download = filename;
-  link.click();
+async function downloadImage(url: string, filename: string) {
+  try {
+    const resp = await fetch(url);
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    // Fallback: open in new tab
+    window.open(url, "_blank");
+  }
 }
 
 export default function VisualizePage() {
   const [scene, setScene] = useState("");
   const [style, setStyle] = useState("cinematic");
   const [mood, setMood] = useState("dramatic");
-  const [images, setImages] = useState<string[]>([]);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imgLoaded, setImgLoaded] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,6 +62,8 @@ export default function VisualizePage() {
     if (!scene.trim()) return;
     setIsLoading(true);
     setError(null);
+    setImageUrl(null);
+    setImgLoaded(false);
 
     try {
       const res = await fetch("/api/visualize", {
@@ -66,17 +78,18 @@ export default function VisualizePage() {
         throw new Error(data.error ?? `Request failed (${res.status})`);
       }
 
-      setImages(data.images ?? []);
+      // URL is set — the <img> tag will fetch & render directly from Pollinations
+      setImageUrl(data.imageUrl ?? null);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Something went wrong. Please try again."
       );
-    } finally {
       setIsLoading(false);
     }
+    // isLoading stays true until <img> fires onLoad or onError
   };
 
-  const hasImages = images.length > 0;
+  const hasImage = !!imageUrl && imgLoaded;
 
   return (
     <div>
@@ -204,9 +217,9 @@ export default function VisualizePage() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2 text-base">
                   <ImageIcon className="w-4 h-4 text-violet-400" />
-                  Generated Visuals
+                  Generated Visual
                 </CardTitle>
-                {hasImages && (
+                {hasImage && (
                   <Button
                     variant="ghost"
                     size="sm"
@@ -222,7 +235,8 @@ export default function VisualizePage() {
 
             <CardContent className="p-6">
               <AnimatePresence mode="wait">
-                {/* Loading */}
+
+                {/* Loading spinner — shown while API call is in flight OR image is still downloading */}
                 {isLoading && (
                   <motion.div
                     key="loading"
@@ -231,7 +245,6 @@ export default function VisualizePage() {
                     exit={{ opacity: 0 }}
                     className="flex flex-col items-center justify-center h-96 gap-6"
                   >
-                    {/* Animated film strip loader */}
                     <div className="relative">
                       <div className="w-20 h-20 rounded-2xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center">
                         <motion.div
@@ -241,7 +254,6 @@ export default function VisualizePage() {
                           <Camera className="w-9 h-9 text-violet-400" />
                         </motion.div>
                       </div>
-                      {/* Orbiting dot */}
                       <motion.div
                         className="absolute -top-1 -right-1 w-3 h-3 rounded-full bg-violet-500"
                         animate={{ scale: [1, 1.4, 1], opacity: [0.6, 1, 0.6] }}
@@ -250,13 +262,12 @@ export default function VisualizePage() {
                     </div>
                     <div className="text-center">
                       <p className="text-sm font-semibold text-text-primary mb-1">
-                        Generating cinematic visuals…
+                        Generating cinematic visual…
                       </p>
                       <p className="text-xs text-text-muted max-w-xs leading-relaxed">
                         FLUX AI is rendering your scene. This usually takes 15–30 seconds.
                       </p>
                     </div>
-                    {/* Progress bar animation */}
                     <div className="w-48 h-1 rounded-full bg-surface-2 overflow-hidden">
                       <motion.div
                         className="h-full bg-gradient-to-r from-violet-500 to-purple-500 rounded-full"
@@ -267,7 +278,7 @@ export default function VisualizePage() {
                   </motion.div>
                 )}
 
-                {/* Error */}
+                {/* API error */}
                 {!isLoading && error && (
                   <motion.div
                     key="error"
@@ -280,24 +291,17 @@ export default function VisualizePage() {
                       <AlertCircle className="w-8 h-8 text-red-400" />
                     </div>
                     <div>
-                      <p className="text-sm font-semibold text-text-primary mb-2">
-                        Generation Failed
-                      </p>
+                      <p className="text-sm font-semibold text-text-primary mb-2">Generation Failed</p>
                       <p className="text-sm text-text-muted max-w-sm leading-relaxed">{error}</p>
                     </div>
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={generate}
-                      leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-                    >
+                    <Button variant="secondary" size="sm" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
                       Try Again
                     </Button>
                   </motion.div>
                 )}
 
-                {/* Empty */}
-                {!isLoading && !error && !hasImages && (
+                {/* Empty state */}
+                {!isLoading && !error && !imageUrl && (
                   <motion.div
                     key="empty"
                     initial={{ opacity: 0 }}
@@ -309,8 +313,7 @@ export default function VisualizePage() {
                       <Camera className="w-10 h-10 text-violet-500/40" />
                     </div>
                     <p className="text-text-muted text-sm max-w-xs leading-relaxed">
-                      Paste your scene description, choose a style and mood,
-                      then hit{" "}
+                      Paste your scene description, choose a style and mood, then hit{" "}
                       <span className="text-violet-400 font-medium">Generate Visual</span>
                     </p>
                     <div className="flex items-center gap-4 mt-6 text-xs text-text-muted">
@@ -330,94 +333,76 @@ export default function VisualizePage() {
                   </motion.div>
                 )}
 
-                {/* Images grid */}
-                {!isLoading && !error && hasImages && (
+                {/* Image — rendered directly from Pollinations URL */}
+                {imageUrl && (
                   <motion.div
-                    key="images"
+                    key="image"
                     initial={{ opacity: 0, scale: 0.97 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0 }}
+                    animate={{ opacity: imgLoaded ? 1 : 0, scale: imgLoaded ? 1 : 0.97 }}
                     transition={{ duration: 0.4 }}
                     className="space-y-5"
                   >
                     {/* Scene context bar */}
                     <div className="px-4 py-3 rounded-xl bg-surface-2 border border-border">
-                      <p className="text-xs text-text-muted font-medium uppercase tracking-wider mb-1">
-                        Scene
-                      </p>
-                      <p className="text-sm text-text-secondary italic line-clamp-2">
-                        &ldquo;{scene}&rdquo;
-                      </p>
+                      <p className="text-xs text-text-muted font-medium uppercase tracking-wider mb-1">Scene</p>
+                      <p className="text-sm text-text-secondary italic line-clamp-2">&ldquo;{scene}&rdquo;</p>
                       <div className="flex items-center gap-2 mt-2">
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 capitalize">
-                          {style}
-                        </span>
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 capitalize">
-                          {mood}
-                        </span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-violet-500/15 text-violet-400 capitalize">{style}</span>
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/15 text-purple-400 capitalize">{mood}</span>
                       </div>
                     </div>
 
-                    {/* Images */}
-                    <div className="grid grid-cols-1 gap-4">
-                      {images.map((b64, idx) => (
-                        <motion.div
-                          key={idx}
-                          initial={{ opacity: 0, y: 16 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: idx * 0.1 }}
-                          className="relative group rounded-2xl overflow-hidden border border-border shadow-card"
-                        >
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={`data:image/png;base64,${b64}`}
-                            alt={`Generated scene ${idx + 1}`}
-                            className="w-full object-cover"
-                          />
-                          {/* Hover overlay */}
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
-                            <Button
-                              size="sm"
-                              onClick={() =>
-                                downloadImage(b64, `scene-visual-${idx + 1}.png`)
-                              }
-                              className="bg-white/15 backdrop-blur-md border border-white/20 text-white hover:bg-white/25 transition-all"
-                              leftIcon={<Download className="w-3.5 h-3.5" />}
-                            >
-                              Download PNG
-                            </Button>
-                          </div>
-                        </motion.div>
-                      ))}
+                    {/* Image card */}
+                    <div className="relative group rounded-2xl overflow-hidden border border-border shadow-card">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={imageUrl}
+                        alt="Generated cinematic scene"
+                        className="w-full object-cover"
+                        onLoad={() => { setImgLoaded(true); setIsLoading(false); }}
+                        onError={() => { setIsLoading(false); setImageUrl(null); setError("The image could not be loaded. Please try again."); }}
+                      />
+                      {/* Hover download overlay */}
+                      {imgLoaded && (
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-end p-4">
+                          <Button
+                            size="sm"
+                            onClick={() => downloadImage(imageUrl, "scene-visual.png")}
+                            className="bg-white/15 backdrop-blur-md border border-white/20 text-white hover:bg-white/25 transition-all"
+                            leftIcon={<Download className="w-3.5 h-3.5" />}
+                          >
+                            Download PNG
+                          </Button>
+                        </div>
+                      )}
                     </div>
 
                     {/* Bottom actions */}
-                    <div className="flex gap-3">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="flex-1"
-                        onClick={generate}
-                        loading={isLoading}
-                        leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
-                      >
-                        Regenerate
-                      </Button>
-                      <Button
-                        size="sm"
-                        className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 text-white border-0"
-                        onClick={() =>
-                          images.forEach((b64, i) =>
-                            downloadImage(b64, `scene-visual-${i + 1}.png`)
-                          )
-                        }
-                        leftIcon={<Download className="w-3.5 h-3.5" />}
-                      >
-                        Download All
-                      </Button>
-                    </div>
+                    {imgLoaded && (
+                      <div className="flex gap-3">
+                        <Button
+                          variant="secondary"
+                          size="sm"
+                          className="flex-1"
+                          onClick={generate}
+                          loading={isLoading}
+                          leftIcon={<RefreshCw className="w-3.5 h-3.5" />}
+                        >
+                          Regenerate
+                        </Button>
+                        <Button
+                          size="sm"
+                          className="flex-1 bg-gradient-to-r from-violet-600 to-purple-600 text-white border-0"
+                          onClick={() => downloadImage(imageUrl, "scene-visual.png")}
+                          leftIcon={<Download className="w-3.5 h-3.5" />}
+                        >
+                          Download PNG
+                        </Button>
+                      </div>
+                    )}
                   </motion.div>
                 )}
+
               </AnimatePresence>
             </CardContent>
           </Card>
