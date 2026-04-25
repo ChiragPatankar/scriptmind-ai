@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase-browser";
 
-// Google "G" SVG logo
 function GoogleIcon() {
   return (
     <svg width="18" height="18" viewBox="0 0 48 48" fill="none">
@@ -21,7 +20,8 @@ function GoogleIcon() {
   );
 }
 
-export default function LoginPage() {
+// Inner component that uses useSearchParams — must be inside <Suspense>
+function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
@@ -33,7 +33,6 @@ export default function LoginPage() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Show callback errors (e.g. auth_failed from /auth/callback)
   useEffect(() => {
     if (searchParams.get("error") === "auth_failed") {
       setError("OAuth login failed. Please try again.");
@@ -64,16 +63,13 @@ export default function LoginPage() {
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
-      },
+      options: { redirectTo: `${window.location.origin}/auth/callback` },
     });
 
     if (error) {
       setError(error.message);
       setGoogleLoading(false);
     }
-    // On success Supabase redirects to Google → then /auth/callback → /projects
   };
 
   return (
@@ -84,7 +80,7 @@ export default function LoginPage() {
     >
       <div className="mb-8">
         <h1 className="text-3xl font-black text-text-primary mb-2">Welcome back</h1>
-          <p className="text-text-muted">Sign in to your ScriptMind AI account.</p>
+        <p className="text-text-muted">Sign in to your ScriptMind AI account.</p>
       </div>
 
       {/* Google OAuth — primary CTA */}
@@ -106,7 +102,6 @@ export default function LoginPage() {
         <div className="flex-1 h-px bg-border" />
       </div>
 
-      {/* Feedback banners */}
       {error && (
         <motion.div
           initial={{ opacity: 0, y: -6 }}
@@ -178,5 +173,14 @@ export default function LoginPage() {
         </Link>
       </p>
     </motion.div>
+  );
+}
+
+// Wrap in Suspense so Next.js can statically prerender the shell
+export default function LoginPage() {
+  return (
+    <Suspense>
+      <LoginForm />
+    </Suspense>
   );
 }
