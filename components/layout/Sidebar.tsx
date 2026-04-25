@@ -18,6 +18,7 @@ import {
   BookOpen,
   IndianRupee,
   X,
+  Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/store";
@@ -36,6 +37,7 @@ const navItems = [
       { label: "Analyse Script",   href: "/analyse",           icon: BarChart3    },
       { label: "AI Dialogue",      href: "/dialogue",          icon: MessageSquare },
       { label: "Create Story",     href: "/create-story",      icon: PenTool      },
+      { label: "Visualize Scene",  href: "/visualize",         icon: Camera       },
       { label: "Finance Studio",   href: "/financial",         icon: IndianRupee  },
       { label: "Download Scripts", href: "/download-scripts",  icon: Download     },
     ],
