@@ -253,7 +253,7 @@ export default function VisualizePage() {
                         Generating cinematic visuals…
                       </p>
                       <p className="text-xs text-text-muted max-w-xs leading-relaxed">
-                        Stable Diffusion is rendering your scene. This takes 15–30 seconds.
+                        FLUX AI is rendering your scene. This usually takes 15–30 seconds.
                       </p>
                     </div>
                     {/* Progress bar animation */}
@@ -320,7 +320,7 @@ export default function VisualizePage() {
                       </span>
                       <span className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-purple-500 inline-block" />
-                        Stable Diffusion
+                        FLUX Model
                       </span>
                       <span className="flex items-center gap-1.5">
                         <span className="w-1.5 h-1.5 rounded-full bg-fuchsia-500 inline-block" />
