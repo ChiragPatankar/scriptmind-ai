@@ -69,6 +69,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(dashboardUrl);
   }
 
+  // Prevent browsers from caching HTML pages — ensures chunk references are
+  // always fresh after a new Cloudflare deployment (avoids 404 chunk errors).
+  const isStaticAsset =
+    pathname.startsWith("/_next/static") ||
+    pathname.startsWith("/_next/image") ||
+    /\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?|ttf|eot)$/.test(pathname);
+
+  if (!isStaticAsset) {
+    supabaseResponse.headers.set(
+      "Cache-Control",
+      "no-cache, no-store, must-revalidate"
+    );
+  }
+
   return supabaseResponse;
 }
 
@@ -76,7 +90,7 @@ export const config = {
   matcher: [
     /*
      * Run on all paths EXCEPT:
-     * - _next/static  (Next.js static assets)
+     * - _next/static  (Next.js static assets — long-lived cache fine here)
      * - _next/image   (image optimisation)
      * - favicon.ico
      * - public files (logo, images, etc.)
