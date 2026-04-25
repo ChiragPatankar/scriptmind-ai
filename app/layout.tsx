@@ -48,6 +48,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" suppressHydrationWarning>
+      <head>
+        {/*
+          Polyfill for esbuild's __name helper.
+          Some pre-bundled npm packages (e.g. framer-motion) reference __name
+          as a global when keepNames is enabled. This must run before any
+          module script so the identifier is always defined.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "if(typeof __name==='undefined'){__name=function(t){return t}}",
+          }}
+        />
+      </head>
       <body>
         <ThemeProvider>
           <MotionProvider>

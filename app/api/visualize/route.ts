@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 // Pollinations.ai — free, no-auth FLUX image generation.
-// We return the URL directly so the browser fetches the image itself,
-// avoiding Cloudflare Worker's 30-second fetch timeout.
+// Returns a URL for the browser to load directly (no Worker proxy = no timeout).
 const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
 
 interface VisualizeInput {
