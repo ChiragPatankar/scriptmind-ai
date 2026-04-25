@@ -7,6 +7,20 @@ export type RevenueMode = "percent" | "amount";
 export type SplitKey = "exhibitor" | "distributor" | "investor" | "pa";
 export type ChartMode = "bar" | "line";
 export type PlatformType = "OTT" | "Satellite" | "Theatrical";
+export type ReleasePlatform = "Theatrical" | "OTT" | "YouTube" | "Instagram" | "Mixed";
+
+export interface DigitalModelConfig {
+  /** Raw subscriber / follower count. 0 = use defaultReach instead. */
+  subscribers: number;
+  /** Fallback base reach (raw view estimate) when subscribers = 0. */
+  defaultReach: number;
+  /** Viral amplification multiplier scale 0–10. */
+  viralityScore: number;
+  /** Expected engagement rate in %. */
+  engagementRate: number;
+  /** Cost per mille (₹ per 1 000 views). Default ₹100. */
+  cpm: number;
+}
 
 export type BreakEvenMode = "auto" | "manual";
 
@@ -462,6 +476,8 @@ interface FinancialStore {
   territory: TerritoryConfig;
   projections: ProjectionsConfig;
   reportGenerated: boolean;
+  releasePlatform: ReleasePlatform;
+  digitalModel: DigitalModelConfig;
 
   setMatrixCell: (phase: PhaseKey, category: BudgetCategory, field: "budget" | "actual", value: number) => void;
   setBreakEvenMode: (mode: BreakEvenMode) => void;
@@ -482,6 +498,8 @@ interface FinancialStore {
   removeTerritoryEntry: (id: string) => void;
   importTerritoryRows: (rows: TerritoryEntry[]) => void;
   setReportGenerated: (value: boolean) => void;
+  setReleasePlatform: (platform: ReleasePlatform) => void;
+  setDigitalModel: (patch: Partial<DigitalModelConfig>) => void;
   /** Restore Finance Studio fields to built-in demo numbers (valid for Generate report). */
   loadDemoValues: () => void;
   resetInputs: () => void;
@@ -513,6 +531,14 @@ const DEMO_PROJECTIONS: ProjectionsConfig = {
   actualCollections: [0, 0, 0, 0, 0],
 };
 
+export const DEFAULT_DIGITAL: DigitalModelConfig = {
+  subscribers: 0,
+  defaultReach: 10_000_000,
+  viralityScore: 5,
+  engagementRate: 3.5,
+  cpm: 100,
+};
+
 const initialState = {
   budgetMatrix: createDemoMatrix(),
   breakEvenMode: "auto" as BreakEvenMode,
@@ -522,6 +548,8 @@ const initialState = {
   territory: DEFAULT_TERRITORY,
   projections: DEMO_PROJECTIONS,
   reportGenerated: false,
+  releasePlatform: "Theatrical" as ReleasePlatform,
+  digitalModel: { ...DEFAULT_DIGITAL },
 };
 
 export const useFinancialStore = create<FinancialStore>()(
@@ -664,6 +692,11 @@ export const useFinancialStore = create<FinancialStore>()(
 
       setReportGenerated: (value) => set({ reportGenerated: value }),
 
+      setReleasePlatform: (platform) => set({ releasePlatform: platform }),
+
+      setDigitalModel: (patch) =>
+        set((s) => ({ digitalModel: { ...s.digitalModel, ...patch } })),
+
       loadDemoValues: () =>
         set({
           budgetMatrix: createDemoMatrix(),
@@ -674,6 +707,8 @@ export const useFinancialStore = create<FinancialStore>()(
           territory: DEFAULT_TERRITORY,
           projections: DEMO_PROJECTIONS,
           reportGenerated: false,
+          releasePlatform: "Theatrical",
+          digitalModel: { ...DEFAULT_DIGITAL },
         }),
 
       resetInputs: () =>
@@ -684,12 +719,14 @@ export const useFinancialStore = create<FinancialStore>()(
           revenue: syncRevenue({ ...DEFAULT_REVENUE }),
           npvConfig: DEFAULT_NPV,
           reportGenerated: false,
+          releasePlatform: "Theatrical",
+          digitalModel: { ...DEFAULT_DIGITAL },
         }),
 
       reset: () => set({ ...initialState }),
     }),
     {
-      name: "scriptmind-financial-v6-demo",
+      name: "scriptmind-financial-v7",
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({
         budgetMatrix: s.budgetMatrix,
@@ -700,6 +737,8 @@ export const useFinancialStore = create<FinancialStore>()(
         territory: s.territory,
         projections: s.projections,
         reportGenerated: s.reportGenerated,
+        releasePlatform: s.releasePlatform,
+        digitalModel: s.digitalModel,
       }),
     }
   )

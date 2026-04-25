@@ -12,7 +12,7 @@ import {
   FileDown, Upload, Plus, Trash2, Percent, ToggleLeft, ToggleRight, Loader2,
   Layers, Landmark, Gauge, Film, ShieldAlert, ShieldCheck, Zap, Sparkles,
   SlidersHorizontal, Lightbulb, ChevronRight, PieChart as PieChartIcon,
-  ChevronDown, ChevronUp, PencilLine,
+  ChevronDown, ChevronUp, PencilLine, Eye, Wifi, PlayCircle, MonitorPlay,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROIGauge } from "@/components/dashboard/ROIGauge";
@@ -23,6 +23,7 @@ import {
   type TerritoryEntry,
   type BreakEvenMode,
   type BudgetCategory,
+  type ReleasePlatform,
   BUDGET_CATEGORIES,
   phaseRowTotals,
   categoryColumnTotals,
@@ -101,6 +102,25 @@ const CATEGORY_LABEL: Record<BudgetCategory, string> = {
   misc:           "Miscellaneous",
 };
 const PLATFORM_OPTIONS: TerritoryEntry["platform"][] = ["Theatrical", "OTT", "Satellite"];
+
+const RELEASE_PLATFORMS: ReleasePlatform[] = ["Theatrical", "OTT", "YouTube", "Instagram", "Mixed"];
+
+const RELEASE_PLATFORM_LABEL: Record<ReleasePlatform, string> = {
+  Theatrical:  "🎬 Theatrical",
+  OTT:         "📺 OTT (Streaming)",
+  YouTube:     "▶  YouTube",
+  Instagram:   "📸 Instagram / Reels",
+  Mixed:       "🔀 Mixed (Multi-platform)",
+};
+
+/** Format large raw view counts nicely: 1 200 000 → "12.0 L" or "1.2 Cr" */
+function fmtViews(n: number): string {
+  if (!isFinite(n) || n <= 0) return "0";
+  if (n >= 1e7) return `${(n / 1e7).toFixed(2)} Cr`;
+  if (n >= 1e5) return `${(n / 1e5).toFixed(2)} L`;
+  if (n >= 1e3) return `${(n / 1e3).toFixed(1)} K`;
+  return String(Math.round(n));
+}
 
 const CHART_PERIOD_PREFIX = { year: "Y", month: "M", week: "W" } as const;
 const CHART_PERIOD_LABEL  = { year: "Yearly", month: "Monthly", week: "Weekly" } as const;
@@ -447,6 +467,10 @@ export default function FinancialPage() {
     resetInputs,
     loadDemoValues,
     reset,
+    releasePlatform,
+    digitalModel,
+    setReleasePlatform,
+    setDigitalModel,
   } = useFinancialStore();
 
   const reportRef = useRef<HTMLDivElement>(null);
@@ -470,6 +494,22 @@ export default function FinancialPage() {
     () => computeMetrics(budgetMatrix, breakEvenMode, breakEvenManual, revenue, npvConfig),
     [budgetMatrix, breakEvenMode, breakEvenManual, revenue, npvConfig],
   );
+
+  // ── Digital release model ────────────────────────────────────────────────
+  const isDigital = releasePlatform !== "Theatrical";
+
+  const digitalMetrics = useMemo(() => {
+    const dm = digitalModel;
+    // baseReach: if subscribers provided use 30% view rate, else use defaultReach
+    const baseReach = dm.subscribers > 0 ? dm.subscribers * 0.3 : dm.defaultReach;
+    // views boosted by virality (viralityScore 0-10)
+    const estimatedViews = baseReach * (1 + dm.viralityScore / 10);
+    // revenue in ₹ = (views / 1000) × CPM
+    const estimatedRevenueINR = (estimatedViews / 1000) * dm.cpm;
+    // convert to ₹ Cr for consistency with the rest of the system
+    const estimatedRevenueCr = estimatedRevenueINR / 1_00_00_000;
+    return { estimatedViews, estimatedRevenueCr };
+  }, [digitalModel]);
 
   const expenseColumnTotals = useMemo(() => categoryColumnTotals(budgetMatrix), [budgetMatrix]);
 
@@ -967,6 +1007,100 @@ export default function FinancialPage() {
             </div>
           </div>
 
+          {/* ── Release Platform ─────────────────────────────────────── */}
+          <div className="space-y-3">
+            <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted flex items-center gap-1.5">
+              Release Platform
+              <span title="Controls whether to model theatrical collections or compute digital revenue from views & CPM." className="cursor-help opacity-50 hover:opacity-100"><Info className="w-3 h-3" /></span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {RELEASE_PLATFORMS.map((p) => (
+                <button
+                  key={p}
+                  type="button"
+                  onClick={() => setReleasePlatform(p)}
+                  className={cn(
+                    "px-4 py-2 rounded-xl text-xs font-bold border transition-all",
+                    releasePlatform === p
+                      ? "border-accent/60 bg-accent/10 text-accent"
+                      : "border-border text-text-muted hover:border-accent/30 hover:text-text-secondary",
+                  )}
+                >
+                  {RELEASE_PLATFORM_LABEL[p]}
+                </button>
+              ))}
+            </div>
+            {isDigital && (
+              <div className="p-3 rounded-xl border border-accent/20 bg-accent/5 text-[11px] text-text-muted flex items-center gap-2">
+                <MonitorPlay className="w-3.5 h-3.5 text-accent shrink-0" />
+                Digital mode active — Collections replaced by Estimated Views & Revenue. Configure the digital model below.
+              </div>
+            )}
+          </div>
+
+          {/* ── Digital Release Model ────────────────────────────────── */}
+          {isDigital && (
+            <div className="space-y-3 rounded-xl border border-accent/15 bg-accent/4 p-4">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-accent/80 flex items-center gap-1.5">
+                <PlayCircle className="w-3.5 h-3.5" />
+                Digital Release Model
+                <span title="views = baseReach × (1 + viralityScore/10) · revenue = (views/1000) × CPM" className="cursor-help opacity-50 hover:opacity-100"><Info className="w-3 h-3" /></span>
+              </p>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <NumField
+                  label="Subscribers / Followers"
+                  value={digitalModel.subscribers}
+                  onChange={(n) => setDigitalModel({ subscribers: n })}
+                  suffix="raw"
+                  tooltip="Total subscriber or follower count. 30% view rate applied. Leave 0 to use Default Reach instead."
+                />
+                <NumField
+                  label="Default Reach (views)"
+                  value={digitalModel.defaultReach}
+                  onChange={(n) => setDigitalModel({ defaultReach: n })}
+                  suffix="views"
+                  tooltip="Base view estimate when no subscriber count is provided. e.g. 10 000 000 = 1 Cr views."
+                />
+                <NumField
+                  label="Virality Score (0–10)"
+                  value={digitalModel.viralityScore}
+                  onChange={(n) => setDigitalModel({ viralityScore: Math.min(10, Math.max(0, n)) })}
+                  suffix="/10"
+                  tooltip="Viral amplification. 0 = no boost; 10 = 100% extra views. Formula: views × (1 + score/10)."
+                />
+                <NumField
+                  label="Engagement Rate (%)"
+                  value={digitalModel.engagementRate}
+                  onChange={(n) => setDigitalModel({ engagementRate: n })}
+                  suffix="%"
+                  tooltip="Likes + comments + shares ÷ impressions × 100. Shown as a KPI in the report."
+                />
+                <NumField
+                  label="CPM (₹ / 1 000 views)"
+                  value={digitalModel.cpm}
+                  onChange={(n) => setDigitalModel({ cpm: n })}
+                  suffix="₹"
+                  tooltip="Cost per mille — revenue earned per 1 000 views. Default ₹100. Drives estimated revenue."
+                />
+              </div>
+              {/* Live preview */}
+              <div className="flex flex-wrap gap-3 pt-1 border-t border-border/30">
+                {[
+                  { label: "Est. Views",   value: fmtViews(digitalMetrics.estimatedViews),                      color: C.cyan   },
+                  { label: "Est. Revenue", value: fmt(digitalMetrics.estimatedRevenueCr),                       color: C.green  },
+                  { label: "Engagement",  value: `${digitalModel.engagementRate.toFixed(1)} %`,                 color: C.purple },
+                  { label: "Base Reach",  value: fmtViews(digitalModel.subscribers > 0 ? digitalModel.subscribers * 0.3 : digitalModel.defaultReach), color: C.gold },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="rounded-lg border px-3 py-1.5 text-center min-w-[100px]"
+                    style={{ borderColor: `${color}25`, background: `${color}08` }}>
+                    <div className="text-[9px] font-bold uppercase tracking-widest" style={{ color }}>{label}</div>
+                    <div className="text-sm font-black tabular-nums text-text-primary">{value}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── Revenue + NPV rate inputs ─────────────────────────────── */}
           <div className="space-y-3">
             <p className="text-[11px] font-bold uppercase tracking-widest text-text-muted">Revenue &amp; discount inputs</p>
@@ -978,13 +1112,24 @@ export default function FinancialPage() {
                 suffix="Cr"
                 tooltip="Primary P&L input: top-line revenue target. Drives Net Revenue, ROI, and efficiency ratio."
               />
-              <NumField
-                label="Total collections (₹ Cr)"
-                value={revenue.totalCollections}
-                onChange={setRevenueTotalCollections}
-                suffix="Cr"
-                tooltip="Gross box-office + OTT + satellite collections across all platforms and windows."
-              />
+              {/* Collections: theatrical only — replaced by digital model when isDigital */}
+              {!isDigital ? (
+                <NumField
+                  label="Total collections (₹ Cr)"
+                  value={revenue.totalCollections}
+                  onChange={setRevenueTotalCollections}
+                  suffix="Cr"
+                  tooltip="Gross box-office + OTT + satellite collections across all platforms and windows."
+                />
+              ) : (
+                <NumField
+                  label="Est. Revenue (₹ Cr) — computed"
+                  value={digitalMetrics.estimatedRevenueCr}
+                  readOnly
+                  suffix="Cr"
+                  tooltip="Computed from Subscribers/Reach × Virality × CPM. Edit digital model above to change."
+                />
+              )}
               <NumField
                 label="Discount rate (%)"
                 value={npvConfig.discountRate}
@@ -1116,14 +1261,28 @@ export default function FinancialPage() {
       {/* ── KPI Strip ──────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.05 }}
         className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3">
-        <KpiChip label="Budget Revenue"    value={fmt(metrics.totalBudgetRevenue)} color={C.blue}   icon={TrendingUp}
+        <KpiChip label="Budget Revenue"   value={fmt(metrics.totalBudgetRevenue)} color={C.blue}   icon={TrendingUp}
           tooltip="Primary P&L input: top-line budgeted revenue target before any expenses." />
         <KpiChip label="Budget Expenses"  value={fmt(metrics.totalBudgetedExpenses)} color={C.purple} icon={Layers}
           tooltip="Total Budget Expenses = sum of all budget cells across the expense matrix." />
         <KpiChip label="Actual Expenses"  value={fmt(metrics.totalActualInvestment)} color={C.orange} icon={BarChart3}
           tooltip="Total Actual Expenses = sum of all actual cells. Used as denominator for ROI and break-even." />
-        <KpiChip label="Collections"      value={fmt(revenue.totalCollections)} color={C.cyan}   icon={TrendingUp}
-          tooltip="Gross box-office + OTT + satellite collections across all platforms." />
+
+        {/* Collections (theatrical) ↔ Digital KPIs — mutually exclusive */}
+        {!isDigital ? (
+          <KpiChip label="Collections"    value={fmt(revenue.totalCollections)} color={C.cyan} icon={TrendingUp}
+            tooltip="Gross box-office + OTT + satellite collections across all platforms." />
+        ) : (
+          <>
+            <KpiChip label="Est. Views"     value={fmtViews(digitalMetrics.estimatedViews)}      color={C.cyan}   icon={Eye}
+              tooltip={`Estimated total views. Formula: baseReach × (1 + viralityScore/10). Virality: ${digitalModel.viralityScore}/10.`} />
+            <KpiChip label="Digital Revenue" value={fmt(digitalMetrics.estimatedRevenueCr)}       color={C.green}  icon={Wifi}
+              tooltip={`Est. Revenue (₹ Cr) = (views ÷ 1 000) × CPM (₹${digitalModel.cpm}). Converted from ₹ to Cr.`} />
+            <KpiChip label="Engagement"     value={`${digitalModel.engagementRate.toFixed(1)} %`} color={C.purple} icon={PlayCircle}
+              tooltip="Engagement Rate = (likes + comments + shares) ÷ impressions × 100. Set in digital model inputs." />
+          </>
+        )}
+
         <KpiChip
           label="Net Revenue"
           value={fmtSigned(metrics.netRevenue)}
@@ -1152,18 +1311,20 @@ export default function FinancialPage() {
               : `Not met in ${projections.periodCount} periods`
           }
           tooltip="Break-even = Total Actual Expenses. Point where cumulative projected revenue equals total investment." />
-        <KpiChip
-          label="Mktg Efficiency"
-          value={metrics.totalMarketingBudget === 0 ? "N/A" : fmtX(metrics.efficiencyRatio)}
-          color={metrics.totalMarketingBudget === 0 ? C.muted : effColor}
-          icon={Gauge}
-          sub={metrics.totalMarketingBudget === 0 ? "No marketing spend" : metrics.efficiencyLabel}
-          tooltip={
-            metrics.totalMarketingBudget === 0
-              ? "Efficiency not available (no marketing spend). Enter a marketing budget in the expense matrix."
-              : "Marketing Efficiency = Budget Revenue ÷ Marketing Expense. >3× = highly efficient, 2–3× = average, <2× = over-spending."
-          }
-        />
+        {!isDigital && (
+          <KpiChip
+            label="Mktg Efficiency"
+            value={metrics.totalMarketingBudget === 0 ? "N/A" : fmtX(metrics.efficiencyRatio)}
+            color={metrics.totalMarketingBudget === 0 ? C.muted : effColor}
+            icon={Gauge}
+            sub={metrics.totalMarketingBudget === 0 ? "No marketing spend" : metrics.efficiencyLabel}
+            tooltip={
+              metrics.totalMarketingBudget === 0
+                ? "Efficiency not available (no marketing spend). Enter a marketing budget in the expense matrix."
+                : "Marketing Efficiency = Budget Revenue ÷ Marketing Expense. >3× = highly efficient, 2–3× = average, <2× = over-spending."
+            }
+          />
+        )}
       </motion.div>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -1173,6 +1334,89 @@ export default function FinancialPage() {
         description="Hybrid: 60 % weighted factors + 40 % similarity-weighted dataset. Fully deterministic.">
         <ProjectionPanel budgetSeed={metrics.totalBudgetedExpenses} hideHeader />
       </SCard>
+
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {/* DIGITAL RELEASE MODEL (shown only when not Theatrical)            */}
+      {/* ══════════════════════════════════════════════════════════════════ */}
+      {isDigital && (
+        <SCard id="digital" title="Digital Release Model" accent={C.cyan} icon={MonitorPlay}
+          description={`Platform: ${RELEASE_PLATFORM_LABEL[releasePlatform]} · views = baseReach × (1 + virality/10) · revenue = (views ÷ 1 000) × CPM`}>
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <MetricBox
+              label="Estimated Views"
+              value={fmtViews(digitalMetrics.estimatedViews)}
+              color={C.cyan}
+              icon={Eye}
+              guidance={`Base reach: ${fmtViews(digitalModel.subscribers > 0 ? digitalModel.subscribers * 0.3 : digitalModel.defaultReach)} · Virality boost: +${(digitalModel.viralityScore * 10).toFixed(0)}%`}
+              tooltip="Estimated total content views after virality amplification. Formula: baseReach × (1 + viralityScore/10)."
+            />
+            <MetricBox
+              label="Estimated Revenue (₹ Cr)"
+              value={fmt(digitalMetrics.estimatedRevenueCr)}
+              color={C.green}
+              icon={Wifi}
+              guidance={`CPM ₹${digitalModel.cpm} · (views ÷ 1 000) × CPM converted to Cr`}
+              tooltip="Revenue = (estimatedViews / 1000) × CPM (₹). Converted to ₹ Crores for P&L consistency."
+            />
+            <MetricBox
+              label="Engagement Rate"
+              value={`${digitalModel.engagementRate.toFixed(1)} %`}
+              color={C.purple}
+              icon={PlayCircle}
+              guidance={
+                digitalModel.engagementRate > 6 ? "Viral — exceptionally high" :
+                digitalModel.engagementRate > 3 ? "Strong — above average" :
+                digitalModel.engagementRate > 1 ? "Average — typical range" :
+                "Below average — consider boosting"
+              }
+              tooltip="Engagement Rate = interactions ÷ impressions × 100. Indicator of content quality and audience resonance."
+            />
+          </div>
+
+          {/* Formula breakdown */}
+          <div className="rounded-xl border border-border/50 bg-surface-2/40 p-4 space-y-3 text-xs">
+            <p className="font-bold text-text-secondary text-[11px] uppercase tracking-widest">Calculation Breakdown</p>
+            <div className="grid sm:grid-cols-2 gap-x-8 gap-y-2 text-text-muted font-mono">
+              <div className="flex justify-between">
+                <span>Subscribers / Followers</span>
+                <span className="text-text-primary font-bold">{fmtViews(digitalModel.subscribers)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>View Rate (subs × 30%)</span>
+                <span className="text-text-primary font-bold">
+                  {digitalModel.subscribers > 0 ? fmtViews(digitalModel.subscribers * 0.3) : "—"}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Default Reach (fallback)</span>
+                <span className="text-text-primary font-bold">{fmtViews(digitalModel.defaultReach)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>Base Reach (used)</span>
+                <span className="text-cyan-400 font-bold">
+                  {fmtViews(digitalModel.subscribers > 0 ? digitalModel.subscribers * 0.3 : digitalModel.defaultReach)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span>Virality multiplier</span>
+                <span className="text-text-primary font-bold">× {(1 + digitalModel.viralityScore / 10).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span>CPM</span>
+                <span className="text-text-primary font-bold">₹{digitalModel.cpm} / 1K views</span>
+              </div>
+              <div className="flex justify-between font-bold text-text-primary border-t border-border/40 pt-2">
+                <span>→ Estimated Views</span>
+                <span className="text-cyan-400">{fmtViews(digitalMetrics.estimatedViews)}</span>
+              </div>
+              <div className="flex justify-between font-bold text-text-primary border-t border-border/40 pt-2">
+                <span>→ Revenue (₹ Cr)</span>
+                <span className="text-green-400">{fmt(digitalMetrics.estimatedRevenueCr)}</span>
+              </div>
+            </div>
+          </div>
+        </SCard>
+      )}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 4. BREAK-EVEN                                                     */}
@@ -1257,9 +1501,9 @@ export default function FinancialPage() {
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 5. TERRITORY                                                      */}
+      {/* 5. TERRITORY (theatrical only)                                    */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="territory" title="Territory / Region Breakdown" accent={C.purple} icon={Globe}
+      {!isDigital && <SCard id="territory" title="Territory / Region Breakdown" accent={C.purple} icon={Globe}
         description="Allocate collections by zone, state, city, platform. Total must not exceed Total Collections.">
         <div className="grid sm:grid-cols-3 gap-3">
           {[
@@ -1341,6 +1585,7 @@ export default function FinancialPage() {
           <ErrBanner msg="No chart data found. Add amounts greater than 0, then click Generate Visualization." />
         )}
         {(territoryZoneVizData.length > 0 || territoryPlatformVizData.length > 0) && (() => {
+          /* Territory visualization inline IIFE — kept as-is */
           const totalViz = territoryZoneVizData.reduce((s, d) => s + d.value, 0);
           const topZone     = territoryZoneVizData.sort((a,b) => b.value - a.value)[0];
           const topPlatform = territoryPlatformVizData.sort((a,b) => b.value - a.value)[0];
@@ -1516,7 +1761,7 @@ export default function FinancialPage() {
             </div>
           );
         })()}
-      </SCard>
+      </SCard>}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* DECISION SUMMARY                                                  */}
@@ -1682,9 +1927,9 @@ export default function FinancialPage() {
       </SCard>
 
       {/* ══════════════════════════════════════════════════════════════════ */}
-      {/* 8. EFFICIENCY                                                     */}
+      {/* 8. EFFICIENCY (theatrical only)                                   */}
       {/* ══════════════════════════════════════════════════════════════════ */}
-      <SCard id="efficiency" title="Marketing efficiency" accent={metrics.totalMarketingBudget===0?C.muted:effColor} icon={Gauge}
+      {!isDigital && <SCard id="efficiency" title="Marketing efficiency" accent={metrics.totalMarketingBudget===0?C.muted:effColor} icon={Gauge}
         description="Total Budget Revenue ÷ Marketing expense (matrix). Measures budgeted yield on marketing spend.">
         {metrics.totalMarketingBudget === 0 ? (
           <div className="flex flex-col items-center gap-3 py-4 text-center">
@@ -1725,7 +1970,7 @@ export default function FinancialPage() {
             </div>
           </div>
         )}
-      </SCard>
+      </SCard>}
 
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 9. NPV & IRR                                                      */}
