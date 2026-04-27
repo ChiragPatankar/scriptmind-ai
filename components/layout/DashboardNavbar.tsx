@@ -11,6 +11,7 @@ import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
 import { useUIStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 import ThemeToggle from "@/components/ui/ThemeToggle";
+import CreditsDisplay from "@/components/CreditsDisplay";
 import { createClient } from "@/lib/supabase-browser";
 import type { User as SupabaseUser } from "@supabase/supabase-js";
 
@@ -108,6 +109,9 @@ export default function DashboardNavbar() {
           </button>
 
           <ThemeToggle />
+
+          {/* Credits balance */}
+          <CreditsDisplay />
 
           {/* Notifications */}
           <button className="relative w-9 h-9 rounded-lg bg-surface-2 border border-border flex items-center justify-center text-text-muted hover:text-text-primary hover:border-accent/30 transition-all duration-200">

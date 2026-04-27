@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCredits }              from "@/lib/credits/withCredits";
 
 const GEMINI_MODEL    = "gemini-2.5-flash";
 const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 
-export async function POST(req: NextRequest) {
+export const POST = withCredits("projection_insights", async (req: NextRequest) => {
   try {
     const apiKey = process.env.GEMINI_API_KEY?.trim();
     if (!apiKey) {
@@ -18,7 +19,6 @@ export async function POST(req: NextRequest) {
       breakEvenWeek, breakEvenAchieved, weightedScore,
     } = body;
 
-    // Minimal prompt — intentionally terse to keep token cost very low
     const prompt = `
 You are a film industry analyst. Given this revenue projection summary, return exactly 4 brief strategic insights (1-2 sentences each). Be specific and actionable. Do NOT repeat the numbers already shown. Focus on risks, opportunities, and release strategy.
 
@@ -36,14 +36,14 @@ Return ONLY a JSON array of 4 strings. Example: ["insight 1", "insight 2", "insi
     const url = `${GEMINI_API_BASE}/${GEMINI_MODEL}:generateContent?key=${apiKey}`;
 
     const res = await fetch(url, {
-      method: "POST",
+      method:  "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
+        contents:         [{ parts: [{ text: prompt }] }],
         generationConfig: {
           responseMimeType: "application/json",
-          maxOutputTokens: 400,   // intentionally very low to save credits
-          temperature: 0.4,
+          maxOutputTokens:  400,
+          temperature:      0.4,
         },
       }),
     });
@@ -69,4 +69,4 @@ Return ONLY a JSON array of 4 strings. Example: ["insight 1", "insight 2", "insi
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }
-}
+});

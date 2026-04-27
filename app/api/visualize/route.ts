@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { withCredits }              from "@/lib/credits/withCredits";
 
 // Pollinations.ai — free, no-auth FLUX image generation.
 // Returns a URL for the browser to load directly (no Worker proxy = no timeout).
@@ -7,29 +8,29 @@ const POLLINATIONS_BASE = "https://image.pollinations.ai/prompt";
 interface VisualizeInput {
   scene: string;
   style: string;
-  mood: string;
+  mood:  string;
 }
 
 function buildPrompt(scene: string, style: string, mood: string): string {
   const styleMap: Record<string, string> = {
     cinematic: "cinematic film still, anamorphic lens, shallow depth of field, 35mm film grain",
     realistic: "photorealistic, ultra-detailed, DSLR photo, natural lighting, sharp focus",
-    anime: "anime style, vibrant colors, hand-drawn aesthetic, studio ghibli, detailed illustration",
+    anime:     "anime style, vibrant colors, hand-drawn aesthetic, studio ghibli, detailed illustration",
   };
   const moodMap: Record<string, string> = {
-    dark: "dark moody atmosphere, low-key dramatic lighting, deep shadows, noir",
-    romantic: "warm golden hour lighting, soft bokeh, intimate and tender",
-    thriller: "high tension, cold desaturated tones, sharp contrast, suspenseful",
-    dramatic: "epic dramatic lighting, powerful composition, intense, cinematic",
+    dark:      "dark moody atmosphere, low-key dramatic lighting, deep shadows, noir",
+    romantic:  "warm golden hour lighting, soft bokeh, intimate and tender",
+    thriller:  "high tension, cold desaturated tones, sharp contrast, suspenseful",
+    dramatic:  "epic dramatic lighting, powerful composition, intense, cinematic",
   };
 
   const styleDesc = styleMap[style] ?? style;
-  const moodDesc = moodMap[mood] ?? mood;
+  const moodDesc  = moodMap[mood]   ?? mood;
 
   return `${moodDesc}, ${styleDesc}: ${scene}. Highly detailed, professional grade, award-winning photography, cinematic composition`;
 }
 
-export async function POST(req: NextRequest) {
+export const POST = withCredits("image_generation", async (req: NextRequest) => {
   try {
     const body = (await req.json()) as Partial<VisualizeInput>;
 
@@ -41,10 +42,8 @@ export async function POST(req: NextRequest) {
     }
 
     const prompt = buildPrompt(body.scene.trim(), body.style, body.mood);
-    const seed = Math.floor(Math.random() * 1_000_000);
+    const seed   = Math.floor(Math.random() * 1_000_000);
 
-    // Build the Pollinations URL and return it — the browser loads the image directly.
-    // This avoids proxying a large binary through the Worker (which would time out).
     const imageUrl = `${POLLINATIONS_BASE}/${encodeURIComponent(prompt)}?model=flux&width=1024&height=576&seed=${seed}&nologo=true`;
 
     return NextResponse.json({ imageUrl });
@@ -52,4 +51,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Failed to build image request.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

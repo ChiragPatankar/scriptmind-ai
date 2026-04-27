@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
-import { generateDialogue, type DialogueInput } from "@/lib/gemini-api";
+import { NextRequest, NextResponse }              from "next/server";
+import { generateDialogue, type DialogueInput }   from "@/lib/gemini-api";
+import { withCredits }                            from "@/lib/credits/withCredits";
 
-export async function POST(req: NextRequest) {
+export const POST = withCredits("dialogue", async (req: NextRequest) => {
   try {
     const body = (await req.json()) as Partial<DialogueInput>;
 
@@ -14,10 +15,10 @@ export async function POST(req: NextRequest) {
 
     const lines = await generateDialogue({
       characters: Array.isArray(body.characters) ? body.characters : [],
-      scene: body.scene,
-      mood: body.mood,
-      language: body.language,
-      style: body.style,
+      scene:      body.scene,
+      mood:       body.mood,
+      language:   body.language,
+      style:      body.style,
     });
 
     return NextResponse.json(lines);
@@ -25,4 +26,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Dialogue generation failed.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});

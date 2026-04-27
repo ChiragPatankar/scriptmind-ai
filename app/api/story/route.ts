@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse }            from "next/server";
 import { generateStoryOutline, type StoryInput } from "@/lib/gemini-api";
+import { withCredits }                           from "@/lib/credits/withCredits";
 
-export async function POST(req: NextRequest) {
+export const POST = withCredits("story_generation", async (req: NextRequest) => {
   try {
     const body = (await req.json()) as Partial<StoryInput>;
 
@@ -13,10 +14,10 @@ export async function POST(req: NextRequest) {
     }
 
     const outline = await generateStoryOutline({
-      title: body.title ?? "",
+      title:   body.title   ?? "",
       premise: body.premise ?? "",
-      genre: body.genre,
-      tone: body.tone,
+      genre:   body.genre,
+      tone:    body.tone,
       setting: body.setting,
     });
 
@@ -25,4 +26,4 @@ export async function POST(req: NextRequest) {
     const message = err instanceof Error ? err.message : "Story generation failed.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
-}
+});
