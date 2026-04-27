@@ -1,27 +1,19 @@
 "use client";
 
-/**
- * React hook — exposes the current user's credit balance and plan.
- *
- * - Fetches via /api/credits/balance (which auto-provisions missing rows)
- * - Updates in real-time via Supabase Realtime on public.users
- * - syncFromHeader() lets callers instantly sync after an AI API response
- */
-
 import { useEffect, useState, useCallback } from "react";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase-browser";
 
 export interface CreditsState {
-  credits:  number | null;
-  plan:     string  | null;
-  loading:  boolean;
-  /** Call with the value of X-Credits-Remaining header to sync instantly */
+  credits:        number | null;
+  plan:           string | null;
+  loading:        boolean;
   syncFromHeader: (remaining: string | null) => void;
 }
 
 export function useCredits(): CreditsState {
   const [credits, setCredits] = useState<number | null>(null);
-  const [plan,    setPlan]    = useState<string  | null>(null);
+  const [plan,    setPlan]    = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const syncFromHeader = useCallback((remaining: string | null) => {
@@ -33,32 +25,36 @@ export function useCredits(): CreditsState {
 
   useEffect(() => {
     const supabase = createClient();
-    let channelRef: ReturnType<typeof supabase.channel> | null = null;
+    let cancelled = false;
+    /** Box so cleanup always sees the latest channel ref (async race-safe). */
+    const channelBox: { current: RealtimeChannel | null } = { current: null };
 
-    async function fetchCredits() {
+    (async () => {
       setLoading(true);
 
-      // Confirm there is an active session first
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setLoading(false); return; }
+      if (!user) {
+        if (!cancelled) setLoading(false);
+        return;
+      }
 
-      // Use the API route — it auto-provisions the row if missing
       try {
         const res = await fetch("/api/credits/balance");
-        if (res.ok) {
+        if (!cancelled && res.ok) {
           const data = await res.json() as { credits: number; plan: string };
           setCredits(data.credits);
           setPlan(data.plan);
         }
       } catch {
-        // Non-fatal — badge just stays hidden
+        // Non-fatal
       }
 
-      setLoading(false);
+      if (!cancelled) setLoading(false);
+      if (cancelled) return;
 
-      // Realtime subscription — credits update live after every AI call
-      channelRef = supabase
-        .channel("credits-watch")
+      // One channel per mount — name includes user id (avoids Strict Mode double-mount collisions)
+      const ch = supabase
+        .channel(`credits-${user.id}`)
         .on(
           "postgres_changes",
           {
@@ -74,14 +70,23 @@ export function useCredits(): CreditsState {
           }
         )
         .subscribe();
-    }
 
-    fetchCredits();
+      channelBox.current = ch;
+
+      // If effect was torn down while we were subscribing, clean up immediately
+      if (cancelled) {
+        supabase.removeChannel(ch);
+        channelBox.current = null;
+      }
+    })();
 
     return () => {
-      if (channelRef) supabase.removeChannel(channelRef);
+      cancelled = true;
+      if (channelBox.current) {
+        supabase.removeChannel(channelBox.current);
+        channelBox.current = null;
+      }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return { credits, plan, loading, syncFromHeader };
