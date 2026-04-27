@@ -19,11 +19,28 @@ interface CreditsDisplayProps {
 }
 
 export default function CreditsDisplay({ className }: CreditsDisplayProps) {
-  const { credits, plan, loading } = useCredits();
+  const { credits, plan, loading, fetchFailed } = useCredits();
 
   if (loading) {
     return (
       <div className={cn("h-8 w-24 rounded-lg bg-surface-2 animate-pulse", className)} />
+    );
+  }
+
+  /* Signed in but balance API failed — show hint instead of hiding */
+  if (fetchFailed && credits === null) {
+    return (
+      <Link
+        href="/settings"
+        title="Could not load credits. Check that SUPABASE_SERVICE_ROLE_KEY is set on the server."
+        className={cn(
+          "flex items-center gap-1 px-2.5 h-9 rounded-lg border text-xs font-semibold",
+          "bg-amber-500/10 border-amber-500/30 text-amber-400",
+          className
+        )}
+      >
+        Credits ?
+      </Link>
     );
   }
 

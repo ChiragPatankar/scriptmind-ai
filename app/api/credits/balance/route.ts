@@ -2,27 +2,39 @@
  * GET /api/credits/balance
  *
  * Returns the authenticated user's credit balance and plan.
- * Auto-provisions the users row if it doesn't exist yet
- * (handles users who signed up before the credits system was added).
- * Uses the service-role admin client so it bypasses RLS safely.
+ * Auto-provisions the users row if missing.
+ *
+ * Uses NextRequest-based Supabase client so auth works on Cloudflare Workers
+ * (OpenNext) where `cookies()` from next/headers is unreliable.
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createClient }              from "@/lib/supabase-server";
-import { createAdminClient }         from "@/lib/supabase-admin";
+import { createRouteSupabase } from "@/lib/supabase-route";
+import { createAdminClient }   from "@/lib/supabase-admin";
 
-export async function GET(_req: NextRequest) {
-  // 1. Identify the caller
-  const supabase = createClient();
+export async function GET(request: NextRequest) {
+  const { supabase, applyCookies } = createRouteSupabase(request);
+
   const { data: { user }, error: authError } = await supabase.auth.getUser();
 
   if (authError || !user) {
-    return NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 });
+    return applyCookies(
+      NextResponse.json({ error: "UNAUTHENTICATED" }, { status: 401 })
+    );
   }
 
-  const admin = createAdminClient();
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return applyCookies(
+      NextResponse.json(
+        { error: "SERVICE_CONFIG", message: "Credits service is not configured." },
+        { status: 503 }
+      )
+    );
+  }
 
-  // 2. Try to fetch existing row
   const { data: existing } = await admin
     .from("users")
     .select("credits, plan")
@@ -30,10 +42,11 @@ export async function GET(_req: NextRequest) {
     .maybeSingle();
 
   if (existing) {
-    return NextResponse.json({ credits: existing.credits, plan: existing.plan });
+    return applyCookies(
+      NextResponse.json({ credits: existing.credits, plan: existing.plan })
+    );
   }
 
-  // 3. Row missing — provision it now (existing user pre-dates credit system)
   const { data: inserted, error: insertErr } = await admin
     .from("users")
     .insert({
@@ -46,11 +59,18 @@ export async function GET(_req: NextRequest) {
     .single();
 
   if (insertErr || !inserted) {
-    return NextResponse.json(
-      { error: "Failed to provision credits account", detail: insertErr?.message },
-      { status: 500 }
+    return applyCookies(
+      NextResponse.json(
+        {
+          error:   "PROVISION_FAILED",
+          message: insertErr?.message ?? "Could not create credits account.",
+        },
+        { status: 500 }
+      )
     );
   }
 
-  return NextResponse.json({ credits: inserted.credits, plan: inserted.plan });
+  return applyCookies(
+    NextResponse.json({ credits: inserted.credits, plan: inserted.plan })
+  );
 }

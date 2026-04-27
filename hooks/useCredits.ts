@@ -8,13 +8,16 @@ export interface CreditsState {
   credits:        number | null;
   plan:           string | null;
   loading:        boolean;
+  /** True when signed in but /api/credits/balance failed (e.g. missing service key). */
+  fetchFailed:    boolean;
   syncFromHeader: (remaining: string | null) => void;
 }
 
 export function useCredits(): CreditsState {
-  const [credits, setCredits] = useState<number | null>(null);
-  const [plan,    setPlan]    = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [credits,     setCredits]     = useState<number | null>(null);
+  const [plan,        setPlan]        = useState<string | null>(null);
+  const [loading,     setLoading]     = useState(true);
+  const [fetchFailed, setFetchFailed] = useState(false);
 
   const syncFromHeader = useCallback((remaining: string | null) => {
     if (remaining !== null) {
@@ -26,11 +29,11 @@ export function useCredits(): CreditsState {
   useEffect(() => {
     const supabase = createClient();
     let cancelled = false;
-    /** Box so cleanup always sees the latest channel ref (async race-safe). */
     const channelBox: { current: RealtimeChannel | null } = { current: null };
 
     (async () => {
       setLoading(true);
+      setFetchFailed(false);
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
@@ -39,20 +42,28 @@ export function useCredits(): CreditsState {
       }
 
       try {
-        const res = await fetch("/api/credits/balance");
-        if (!cancelled && res.ok) {
-          const data = await res.json() as { credits: number; plan: string };
-          setCredits(data.credits);
-          setPlan(data.plan);
+        const res = await fetch("/api/credits/balance", {
+          credentials: "include",
+          cache:         "no-store",
+        });
+
+        if (!cancelled) {
+          if (res.ok) {
+            const data = await res.json() as { credits: number; plan: string };
+            setCredits(data.credits);
+            setPlan(data.plan);
+            setFetchFailed(false);
+          } else {
+            setFetchFailed(true);
+          }
         }
       } catch {
-        // Non-fatal
+        if (!cancelled) setFetchFailed(true);
       }
 
       if (!cancelled) setLoading(false);
       if (cancelled) return;
 
-      // One channel per mount — name includes user id (avoids Strict Mode double-mount collisions)
       const ch = supabase
         .channel(`credits-${user.id}`)
         .on(
@@ -73,7 +84,6 @@ export function useCredits(): CreditsState {
 
       channelBox.current = ch;
 
-      // If effect was torn down while we were subscribing, clean up immediately
       if (cancelled) {
         supabase.removeChannel(ch);
         channelBox.current = null;
@@ -89,5 +99,5 @@ export function useCredits(): CreditsState {
     };
   }, []);
 
-  return { credits, plan, loading, syncFromHeader };
+  return { credits, plan, loading, fetchFailed, syncFromHeader };
 }
