@@ -8,7 +8,6 @@ export interface CreditsState {
   credits:        number | null;
   plan:           string | null;
   loading:        boolean;
-  /** True when signed in but /api/credits/balance failed (e.g. missing service key). */
   fetchFailed:    boolean;
   syncFromHeader: (remaining: string | null) => void;
 }
@@ -31,49 +30,34 @@ export function useCredits(): CreditsState {
     let cancelled = false;
     const channelBox: { current: RealtimeChannel | null } = { current: null };
 
-    (async () => {
-      setLoading(true);
-      setFetchFailed(false);
-
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        if (!cancelled) setLoading(false);
-        return;
-      }
-
+    async function fetchBalance(userId: string) {
       try {
         const res = await fetch("/api/credits/balance", {
           credentials: "include",
-          cache:         "no-store",
+          cache:        "no-store",
         });
-
-        if (!cancelled) {
-          if (res.ok) {
-            const data = await res.json() as { credits: number; plan: string };
-            setCredits(data.credits);
-            setPlan(data.plan);
-            setFetchFailed(false);
-          } else {
-            setFetchFailed(true);
-          }
+        if (cancelled) return;
+        if (res.ok) {
+          const data = await res.json() as { credits: number; plan: string };
+          setCredits(data.credits);
+          setPlan(data.plan);
+          setFetchFailed(false);
+        } else {
+          setFetchFailed(true);
         }
       } catch {
         if (!cancelled) setFetchFailed(true);
       }
-
       if (!cancelled) setLoading(false);
-      if (cancelled) return;
+    }
 
+    function subscribeRealtime(userId: string) {
+      if (channelBox.current) return; // already subscribed
       const ch = supabase
-        .channel(`credits-${user.id}`)
+        .channel(`credits-${userId}`)
         .on(
           "postgres_changes",
-          {
-            event:  "UPDATE",
-            schema: "public",
-            table:  "users",
-            filter: `id=eq.${user.id}`,
-          },
+          { event: "UPDATE", schema: "public", table: "users", filter: `id=eq.${userId}` },
           (payload) => {
             const row = payload.new as { credits: number; plan: string };
             setCredits(row.credits);
@@ -81,17 +65,30 @@ export function useCredits(): CreditsState {
           }
         )
         .subscribe();
-
       channelBox.current = ch;
+    }
 
-      if (cancelled) {
-        supabase.removeChannel(ch);
-        channelBox.current = null;
+    /**
+     * onAuthStateChange fires with INITIAL_SESSION once cookies/localStorage
+     * are read — this is the reliable way to detect the session on Cloudflare.
+     * getUser() alone can return null on the first tick before hydration.
+     */
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, session) => {
+        if (cancelled) return;
+        if (session?.user) {
+          fetchBalance(session.user.id);
+          subscribeRealtime(session.user.id);
+        } else {
+          // Not signed in
+          setLoading(false);
+        }
       }
-    })();
+    );
 
     return () => {
       cancelled = true;
+      subscription.unsubscribe();
       if (channelBox.current) {
         supabase.removeChannel(channelBox.current);
         channelBox.current = null;
