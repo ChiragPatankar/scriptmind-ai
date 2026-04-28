@@ -46,9 +46,8 @@ export default function CreditsDisplay({ className }: CreditsDisplayProps) {
 
   if (credits === null) return null;
 
-  const isOut     = credits === 0;
-  const isLow     = credits > 0 && credits <= 5;
-  const isHealthy = credits > 5;
+  const isOut = credits === 0;
+  const isLow = credits > 0 && credits <= 5;
 
   const pillColor = isOut
     ? "bg-red-500/15 border-red-500/30 text-red-400"
