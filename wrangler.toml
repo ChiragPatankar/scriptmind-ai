@@ -11,5 +11,7 @@ compatibility_flags = ["nodejs_compat"]
 assets = { directory = ".open-next/assets", binding = "ASSETS" }
 
 [vars]
-NEXT_PUBLIC_APP_URL = "https://scriptmind-ai.workers.dev"
-NEXT_PUBLIC_ANALYSE_API_URL = "https://tenthdimensions-scriptmind-backend.hf.space"
+NEXT_PUBLIC_APP_URL          = "https://scriptmind-ai.workers.dev"
+NEXT_PUBLIC_ANALYSE_API_URL  = "https://tenthdimensions-scriptmind-backend.hf.space"
+NEXT_PUBLIC_SUPABASE_URL     = "https://epwvkctmlbrmmlvmudrv.supabase.co"
+NEXT_PUBLIC_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVwd3ZrY3RtbGJybW1sdm11ZHJ2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTIzNjMsImV4cCI6MjA5MjYyODM2M30.7PTr00SXYA1ZAVSbhQLfhQ_mzCrth5iD_Ty-p-s8Tyw"
