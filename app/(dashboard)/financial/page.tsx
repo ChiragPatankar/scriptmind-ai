@@ -9,14 +9,15 @@ import {
 import {
   TrendingUp, TrendingDown, DollarSign, Target, BarChart3, AlertTriangle,
   CheckCircle2, XCircle, Calculator, Globe, RefreshCcw, Save, Info,
-  FileDown, Upload, Plus, Trash2, Percent, ToggleLeft, ToggleRight, Loader2,
+  FileDown, Upload, Plus, Trash2, Percent, ToggleLeft, ToggleRight,
   Layers, Landmark, Gauge, Film, ShieldAlert, ShieldCheck, Zap, Sparkles,
   SlidersHorizontal, Lightbulb, ChevronRight, PieChart as PieChartIcon,
-  ChevronDown, ChevronUp, PencilLine, Eye, Wifi, PlayCircle, MonitorPlay,
+  ChevronDown, ChevronUp, Eye, Wifi, PlayCircle, MonitorPlay,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ROIGauge } from "@/components/dashboard/ROIGauge";
 import { ProjectionPanel } from "@/components/dashboard/ProjectionPanel";
+import GenerateButton from "@/components/finance/GenerateButton";
 import {
   type PhaseKey,
   type SplitKey,
@@ -463,7 +464,6 @@ export default function FinancialPage() {
     setPeriodCount,
     setChartMode,
     setProjectedValue,
-    setReportGenerated,
     resetInputs,
     loadDemoValues,
     reset,
@@ -477,8 +477,7 @@ export default function FinancialPage() {
   const [saving, setSaving] = useState(false);
   const [csvErrors, setCsvErrors] = useState<string[]>([]);
   const [autoBalMsg, setAutoBalMsg] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [generateErrors, setGenerateErrors] = useState<string[]>([]);
+  const [generateErrors] = useState<string[]>([]);
   const [inputsCollapsed, setInputsCollapsed] = useState(false);
   const [cashFlowPeriod, setCashFlowPeriod] = useState<"year" | "month" | "week">("year");
   const [periodCountStr, setPeriodCountStr] = useState(() => String(projections.periodCount));
@@ -514,7 +513,6 @@ export default function FinancialPage() {
   const expenseColumnTotals = useMemo(() => categoryColumnTotals(budgetMatrix), [budgetMatrix]);
 
   const inputValidation = useMemo(() => validateFinanceInputs(revenue), [revenue]);
-  const canGenerateReport = inputValidation.ok;
 
   // ── Decision + Insights ─────────────────────────────────────────────────────
   const decision = useMemo(() => computeDecision({
@@ -716,24 +714,6 @@ export default function FinancialPage() {
     }
   };
 
-  const isValid = canGenerateReport;
-
-  const handleGenerateReport = useCallback(() => {
-    setGenerateErrors([]);
-    if (!inputValidation.ok) {
-      setGenerateErrors(inputValidation.errors);
-      return;
-    }
-    setIsGenerating(true);
-    window.setTimeout(() => {
-      setReportGenerated(true);
-      setIsGenerating(false);
-      setInputsCollapsed(true);
-      window.setTimeout(() => {
-        reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 150);
-    }, 400);
-  }, [inputValidation, setReportGenerated]);
   const handleLoad = async () => {
     const p = await getFinancialData();
     if (p) importTerritoryRows(p.territory.entries);
@@ -805,27 +785,17 @@ export default function FinancialPage() {
               <Button type="button" variant="ghost" size="sm" onClick={() => { resetInputs(); setInputsCollapsed(false); }}>
                 <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />Reset
               </Button>
-              <Button
-                type="button"
-                size="sm"
-                disabled={!isValid || isGenerating}
-                onClick={handleGenerateReport}
-                className="flex-1 sm:flex-none sm:min-w-[10rem]"
-              >
-                {isGenerating ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                    Generating…
-                  </>
-                ) : reportGenerated ? (
-                  <>
-                    <PencilLine className="w-3.5 h-3.5 mr-1.5" />
-                    Re-generate
-                  </>
-                ) : (
-                  "Generate Report"
-                )}
-              </Button>
+              <GenerateButton
+                payload={{
+                  budgetMatrix,
+                  breakEvenMode,
+                  breakEvenManual,
+                  revenue,
+                  npvConfig,
+                  territory,
+                  projections,
+                }}
+              />
             </div>
           </div>
 
@@ -1248,7 +1218,7 @@ export default function FinancialPage() {
 
       {!reportGenerated && (
         <p className="text-center text-sm text-text-muted py-6">
-          Fill the matrix and revenue split, then click <strong className="text-text-primary">Generate Financial Report</strong> to unlock the full analysis.
+          Fill the matrix and revenue split, then click <strong className="text-text-primary">Generate Report</strong> above to unlock the full analysis.
         </p>
       )}
 
