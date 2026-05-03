@@ -255,8 +255,7 @@ export default function SettingsPage() {
       location: form.location,  bio: form.bio,
     });
     setSaving(false);
-    error ? addToast("error", "Failed to save profile.") : addToast("success", "Profile saved!");
-    if (!error) setProfile((p) => p ? { ...p, ...form } : p);
+    if (error) { addToast("error", "Failed to save profile."); } else { addToast("success", "Profile saved!"); setProfile((p) => p ? { ...p, ...form } : p); }
   }
 
   // ── Avatar upload ─────────────────────────────────────────────────────────
@@ -301,7 +300,7 @@ export default function SettingsPage() {
       .update({ notification_prefs: notifs })
       .eq("id", user.id);
     setNotifsSaving(false);
-    error ? addToast("error", "Failed to save preferences.") : addToast("success", "Preferences saved!");
+    if (error) { addToast("error", "Failed to save preferences."); } else { addToast("success", "Preferences saved!"); }
   }
 
   // ── Theme save ────────────────────────────────────────────────────────────
@@ -330,8 +329,7 @@ export default function SettingsPage() {
     setPwSaving(true);
     const { error } = await supabase.auth.updateUser({ password: pwForm.next });
     setPwSaving(false);
-    error ? addToast("error", error.message) : addToast("success", "Password updated successfully!");
-    if (!error) setPwForm({ next: "", confirm: "" });
+    if (error) { addToast("error", error.message); } else { addToast("success", "Password updated successfully!"); setPwForm({ next: "", confirm: "" }); }
   }
 
   // ── Sign out all devices ──────────────────────────────────────────────────
