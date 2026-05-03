@@ -14,11 +14,14 @@ export const POST = withCredits("dialogue", async (req: NextRequest) => {
     }
 
     const lines = await generateDialogue({
-      characters: Array.isArray(body.characters) ? body.characters : [],
-      scene:      body.scene,
-      mood:       body.mood,
-      language:   body.language,
-      style:      body.style,
+      characters:        Array.isArray(body.characters) ? body.characters : [],
+      characterProfiles: Array.isArray(body.characterProfiles) ? body.characterProfiles : undefined,
+      scene:             body.scene,
+      mood:              body.mood,
+      language:          body.language,
+      style:             body.style,
+      subtext:           typeof body.subtext === "string" ? body.subtext : undefined,
+      dialogueLength:    body.dialogueLength as "short" | "medium" | "long" | undefined,
     });
 
     return NextResponse.json(lines);

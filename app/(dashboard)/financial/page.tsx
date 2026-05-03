@@ -15,6 +15,7 @@ import {
   ChevronDown, ChevronUp, Eye, Wifi, PlayCircle, MonitorPlay,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CreditBadge } from "@/components/ui/CreditBadge";
 import { ROIGauge } from "@/components/dashboard/ROIGauge";
 import { ProjectionPanel } from "@/components/dashboard/ProjectionPanel";
 import GenerateButton from "@/components/finance/GenerateButton";
@@ -735,8 +736,11 @@ export default function FinancialPage() {
             <Film className="w-5 h-5" style={{ color: C.blue }} />
           </div>
           <div>
-            <h1 className="text-lg font-black text-text-primary">Finance Studio</h1>
-            <p className="text-[11px] text-text-muted">Studio-grade film financial modelling</p>
+            <div className="flex items-center gap-2">
+              <h1 className="text-lg font-black text-text-primary">Finance Studio</h1>
+              <CreditBadge cost={1} label="credit for AI insights" size="sm" />
+            </div>
+            <p className="text-[11px] text-text-muted">Studio-grade film financial modelling · 1 free trial</p>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -785,17 +789,6 @@ export default function FinancialPage() {
               <Button type="button" variant="ghost" size="sm" onClick={() => { resetInputs(); setInputsCollapsed(false); }}>
                 <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />Reset
               </Button>
-              <GenerateButton
-                payload={{
-                  budgetMatrix,
-                  breakEvenMode,
-                  breakEvenManual,
-                  revenue,
-                  npvConfig,
-                  territory,
-                  projections,
-                }}
-              />
             </div>
           </div>
 
@@ -1216,17 +1209,31 @@ export default function FinancialPage() {
           </div>{/* end collapsible wrapper */}
       </section>
 
-      {!reportGenerated && (
-        <p className="text-center text-sm text-text-muted py-6">
-          Fill the matrix and revenue split, then click <strong className="text-text-primary">Generate Report</strong> above to unlock the full analysis.
-        </p>
-      )}
+      {/* ── Generate button — always visible below inputs ── */}
+      <div className="flex flex-col items-center gap-3 py-4">
+        <GenerateButton
+          payload={{
+            budgetMatrix,
+            breakEvenMode,
+            breakEvenManual,
+            revenue,
+            npvConfig,
+            territory,
+            projections,
+          }}
+        />
+        {!reportGenerated && (
+          <p className="text-xs text-text-muted text-center">
+            Fill the matrix and revenue split above, then generate your report.
+          </p>
+        )}
+      </div>
 
       {reportGenerated && (
         <div
           id="financial-report"
           ref={reportRef}
-          className="mt-10 space-y-8 scroll-mt-24"
+          className="mt-4 space-y-8 scroll-mt-24"
         >
       {/* ── KPI Strip ──────────────────────────────────────────────────── */}
       <motion.div initial={{ opacity:0, y:8 }} animate={{ opacity:1, y:0 }} transition={{ delay:0.05 }}

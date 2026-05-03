@@ -47,7 +47,7 @@ export default function CreditsDisplay({ className }: CreditsDisplayProps) {
   if (credits === null) return null;
 
   const isOut = credits === 0;
-  const isLow = credits > 0 && credits <= 5;
+  const isLow = credits > 0 && credits <= 10;
 
   const pillColor = isOut
     ? "bg-red-500/15 border-red-500/30 text-red-400"
@@ -101,7 +101,7 @@ export default function CreditsDisplay({ className }: CreditsDisplayProps) {
 // ── Separate toast-style banner for use inside feature pages ──────────────────
 
 export function LowCreditsBanner({ credits }: { credits: number | null }) {
-  if (credits === null || credits > 5) return null;
+  if (credits === null || credits > 10) return null;
 
   return (
     <div

@@ -1,6 +1,6 @@
 import React from "react";
 import Link from "next/link";
-import { Sparkles } from "lucide-react";
+import Image from "next/image";
 
 export default function AuthLayout({
   children,
@@ -17,8 +17,8 @@ export default function AuthLayout({
 
         <div className="relative z-10 max-w-sm text-center">
           <Link href="/" className="inline-flex items-center gap-2.5 mb-12">
-            <div className="w-10 h-10 rounded-xl bg-gradient-accent flex items-center justify-center shadow-glow">
-              <Sparkles className="w-5 h-5 text-white" />
+            <div className="w-10 h-10 rounded-xl overflow-hidden flex-shrink-0">
+              <Image src="/logo.png" alt="ScriptMind AI" width={40} height={40} className="w-full h-full object-contain" />
             </div>
             <span className="text-xl font-bold text-text-primary">
               ScriptMind <span className="text-gradient">AI</span>
@@ -26,18 +26,19 @@ export default function AuthLayout({
           </Link>
 
           <h2 className="text-4xl font-black text-text-primary mb-4 leading-tight">
-            The Bollywood <span className="text-gradient">Script Universe</span>
+            Where <span className="text-gradient">Cinema</span> Meets Artificial Intelligence
           </h2>
           <p className="text-text-secondary leading-relaxed mb-10">
-            Analyse, generate, and create Bollywood screenplays with the power of AI. Trusted by 50,000+ storytellers.
+            Write, analyse, and produce scripts for film, OTT, and web series — in any language, any genre, any market.
           </p>
 
           <div className="flex flex-col gap-3">
             {[
-              "10,000+ Bollywood scripts to explore",
-              "AI dialogue in Hindi, Hinglish & English",
-              "Complete story outline in minutes",
-              "Script analysis with instant insights",
+              "AI script analysis with cinematic insights",
+              "Dialogue generation across languages & genres",
+              "Full story outlines in minutes",
+              "Box office & OTT revenue projections",
+              "Scene visualisation powered by AI",
             ].map((feature) => (
               <div key={feature} className="flex items-center gap-2.5 text-sm text-text-secondary text-left">
                 <div className="w-1.5 h-1.5 rounded-full bg-secondary flex-shrink-0" />
@@ -53,8 +54,8 @@ export default function AuthLayout({
         <div className="w-full max-w-md">
           {/* Mobile Logo */}
           <Link href="/" className="flex items-center gap-2.5 mb-8 lg:hidden">
-            <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center">
-              <Sparkles className="w-4 h-4 text-white" />
+            <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
+              <Image src="/logo.png" alt="ScriptMind AI" width={32} height={32} className="w-full h-full object-contain" />
             </div>
             <span className="text-base font-bold text-text-primary">
               ScriptMind <span className="text-gradient">AI</span>

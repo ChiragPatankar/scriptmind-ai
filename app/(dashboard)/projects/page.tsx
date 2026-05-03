@@ -574,11 +574,8 @@ function ProjectRow({ project, onEdit, onDelete, onDuplicate, onStatusChange }: 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
 export default function ProjectsPage() {
-  const { projects, addProject, updateProject, removeProject, duplicateProject, initializeDefaults } = useProjectStore();
+  const { projects, addProject, updateProject, removeProject, duplicateProject } = useProjectStore();
   const { toasts, show: showToast } = useToast();
-
-  // Initialize seed data on first load
-  useEffect(() => { initializeDefaults(); }, [initializeDefaults]);
 
   // Local UI state
   const [search,        setSearch]        = useState("");

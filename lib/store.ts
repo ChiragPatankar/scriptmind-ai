@@ -114,86 +114,16 @@ export const useScriptStore = create<ScriptState>()((set) => ({
 
 // ─── Project Store ────────────────────────────────────────────────────────────
 
-const SEED_PROJECTS: Project[] = [
-  {
-    id: "seed-1",
-    name: "Mumbai Monsoon",
-    description: "A romantic drama set during Mumbai rains about two strangers who meet on a local train and discover an unexpected connection.",
-    type: "screenplay",
-    status: "in-progress",
-    genre: "Romantic Drama",
-    tags: ["Mumbai", "Romance", "Drama"],
-    wordCount: 12400,
-    targetWordCount: 18000,
-    createdAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-    updatedAt: new Date(Date.now() - 3600000).toISOString(),
-  },
-  {
-    id: "seed-2",
-    name: "Dialogue Analysis — Sholay",
-    description: "Deep analysis of iconic Sholay dialogues, character voice mapping, sentiment flow and originality scoring.",
-    type: "analysis",
-    status: "completed",
-    genre: "Action",
-    tags: ["Classic", "Analysis", "Bollywood"],
-    wordCount: 4200,
-    createdAt: new Date(Date.now() - 86400000 * 7).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: "seed-3",
-    name: "Villain Monologue Pack",
-    description: "AI-generated villain dialogues for a period Mughal drama — intense, poetic, and menacing. 12 scenes written.",
-    type: "dialogue",
-    status: "draft",
-    genre: "Period Drama",
-    tags: ["Villain", "Dialogue", "Mughal"],
-    wordCount: 3200,
-    targetWordCount: 8000,
-    createdAt: new Date(Date.now() - 86400000).toISOString(),
-    updatedAt: new Date(Date.now() - 1800000).toISOString(),
-  },
-  {
-    id: "seed-4",
-    name: "Heist in Delhi",
-    description: "A fast-paced heist thriller set in Connaught Place. Think Bollywood meets Ocean's Eleven — with a desi twist.",
-    type: "story",
-    status: "draft",
-    genre: "Thriller",
-    tags: ["Heist", "Delhi", "Thriller"],
-    wordCount: 5800,
-    targetWordCount: 20000,
-    createdAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-    updatedAt: new Date(Date.now() - 7200000).toISOString(),
-    budget: 450000,
-  },
-  {
-    id: "seed-5",
-    name: "Comedy of Errors — Punjabi",
-    description: "A laugh-out-loud family comedy set at a Punjabi wedding. Mistaken identities, chaotic families, and unexpected love.",
-    type: "screenplay",
-    status: "completed",
-    genre: "Comedy",
-    tags: ["Comedy", "Punjabi", "Family"],
-    wordCount: 16800,
-    targetWordCount: 16000,
-    createdAt: new Date(Date.now() - 86400000 * 14).toISOString(),
-    updatedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-];
-
 interface ProjectState {
   projects: Project[];
   activeProject: Project | null;
-  _seeded: boolean;
 
-  setProjects:        (projects: Project[]) => void;
-  setActiveProject:   (project: Project | null) => void;
-  addProject:         (project: Project) => void;
-  updateProject:      (id: string, updates: Partial<Project>) => void;
-  removeProject:      (id: string) => void;
-  duplicateProject:   (id: string) => void;
-  initializeDefaults: () => void;
+  setProjects:      (projects: Project[]) => void;
+  setActiveProject: (project: Project | null) => void;
+  addProject:       (project: Project) => void;
+  updateProject:    (id: string, updates: Partial<Project>) => void;
+  removeProject:    (id: string) => void;
+  duplicateProject: (id: string) => void;
 }
 
 export const useProjectStore = create<ProjectState>()(
@@ -201,15 +131,12 @@ export const useProjectStore = create<ProjectState>()(
     (set, get) => ({
       projects: [],
       activeProject: null,
-      _seeded: false,
 
       setProjects:      (projects) => set({ projects }),
       setActiveProject: (project) => set({ activeProject: project }),
 
       addProject: (project) =>
-        set((state) => ({
-          projects: [project, ...state.projects],
-        })),
+        set((state) => ({ projects: [project, ...state.projects] })),
 
       updateProject: (id, updates) =>
         set((state) => ({
@@ -236,13 +163,6 @@ export const useProjectStore = create<ProjectState>()(
           updatedAt: new Date().toISOString(),
         };
         set((state) => ({ projects: [copy, ...state.projects] }));
-      },
-
-      initializeDefaults: () => {
-        const { projects, _seeded } = get();
-        if (!_seeded && projects.length === 0) {
-          set({ projects: SEED_PROJECTS, _seeded: true });
-        }
       },
     }),
     {

@@ -1,20 +1,18 @@
 "use client";
 
-import React from "react";
+import React, { useState } from "react";
 import { motion } from "framer-motion";
-import { Sparkles, RefreshCw } from "lucide-react";
+import { Sparkles, RefreshCw, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import type { AnalyseScriptReport } from "@/lib/mock/analyse-script";
 import { MetricCardsSection } from "@/components/analyse/MetricCardsSection";
-import { ImprovementTracker } from "@/components/analyse/ImprovementTracker";
 import { SimilarStories } from "@/components/analyse/SimilarStories";
 import { EmotionalTimelineSection } from "@/components/analyse/EmotionalTimelineSection";
 import { EmotionDistributionSection } from "@/components/analyse/EmotionDistributionSection";
 import { CharacterAnalysisSection } from "@/components/analyse/CharacterAnalysisSection";
 import { DialogueAnalysisCard } from "@/components/analyse/DialogueAnalysisCard";
 import { InsightsSection } from "@/components/analyse/InsightsSection";
-import { AnalyseUtilities } from "@/components/analyse/AnalyseUtilities";
 
 const section = { hidden: { opacity: 0, y: 16 }, show: { opacity: 1, y: 0 } };
 
@@ -25,6 +23,20 @@ export function AnalyseScriptDashboard({
   report: AnalyseScriptReport;
   onAnalyseAnother: () => void;
 }) {
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  async function handleDownloadPdf() {
+    setPdfLoading(true);
+    try {
+      const { downloadScriptReport } = await import("@/lib/pdf/downloadReport");
+      await downloadScriptReport(report);
+    } catch (e) {
+      console.error("PDF generation failed", e);
+    } finally {
+      setPdfLoading(false);
+    }
+  }
+
   return (
     <TooltipProvider delayDuration={180}>
       <motion.div
@@ -52,10 +64,22 @@ export function AnalyseScriptDashboard({
               Emotional intelligence, character analytics, and risk engine — powered by Gemini AI.
             </p>
           </div>
-          <Button variant="secondary" onClick={onAnalyseAnother} className="shrink-0 gap-2">
-            <RefreshCw className="w-4 h-4" />
-            Analyse another
-          </Button>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button
+              onClick={handleDownloadPdf}
+              disabled={pdfLoading}
+              className="gap-2"
+              style={{ background: "linear-gradient(135deg,#6366F1,#8B5CF6)" }}
+            >
+              {pdfLoading
+                ? <><Loader2 className="w-4 h-4 animate-spin" />Generating PDF…</>
+                : <><Download className="w-4 h-4" />Download PDF</>}
+            </Button>
+            <Button variant="secondary" onClick={onAnalyseAnother} className="gap-2">
+              <RefreshCw className="w-4 h-4" />
+              Analyse another
+            </Button>
+          </div>
         </motion.header>
 
         {/* ── Section 1: Top Metrics ── */}
@@ -68,15 +92,7 @@ export function AnalyseScriptDashboard({
           />
         </motion.div>
 
-        {/* ── Section 2: Improvement Tracker ── */}
-        <motion.div variants={section}>
-          <ImprovementTracker
-            previousScore={report.previousScore}
-            newScore={report.newScore}
-          />
-        </motion.div>
-
-        {/* ── Section 3: Emotional Timeline (time-based) ── */}
+        {/* ── Section 2: Emotional Timeline (time-based) ── */}
         <motion.div variants={section}>
           <EmotionalTimelineSection timeline={report.emotionalTimeline} />
         </motion.div>
@@ -119,10 +135,6 @@ export function AnalyseScriptDashboard({
           </motion.div>
         )}
 
-        {/* ── Section 9: Utilities ── */}
-        <motion.div variants={section}>
-          <AnalyseUtilities report={report} />
-        </motion.div>
       </motion.div>
     </TooltipProvider>
   );

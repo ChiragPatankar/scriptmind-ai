@@ -61,6 +61,21 @@ export default function RootLayout({
               "if(typeof __name==='undefined'){__name=function(t){return t}}",
           }}
         />
+        {/* Intercept fetch globally to detect X-Credits-Remaining header and fire credits-changed event */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){
+  var _fetch = window.fetch;
+  window.fetch = function() {
+    return _fetch.apply(this, arguments).then(function(res) {
+      var h = res.headers.get('x-credits-remaining');
+      if (h !== null) window.dispatchEvent(new CustomEvent('credits-changed', { detail: { remaining: parseInt(h, 10) } }));
+      return res;
+    });
+  };
+})();`,
+          }}
+        />
       </head>
       <body>
         <ThemeProvider>

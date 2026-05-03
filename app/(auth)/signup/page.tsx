@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Mail, Lock, Eye, EyeOff, User, UserPlus,
@@ -13,9 +14,9 @@ import { createClient } from "@/lib/supabase-browser";
 
 const perks = [
   "Free forever plan",
-  "5 script analyses/month",
-  "AI dialogue generator",
-  "Access to 100 scripts/month",
+  "AI script analysis & insights",
+  "Multi-language dialogue generator",
+  "Box office & OTT projections",
 ];
 
 // Google "G" SVG logo
@@ -42,6 +43,7 @@ const strengthColors = ["bg-surface-3", "bg-red-500", "bg-gold", "bg-blue-400", 
 
 export default function SignupPage() {
   const supabase = createClient();
+  const router   = useRouter();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -75,9 +77,14 @@ export default function SignupPage() {
       return;
     }
 
-    // Supabase sends a confirmation email by default.
-    // If email confirmation is OFF in dashboard, user lands straight in the app.
-    setSuccess("Account created! Check your email to confirm, then sign in.");
+    // If email confirmation is OFF, session is active — send to plan selection.
+    // If ON, user must confirm first; show message and the callback will redirect.
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      router.push("/onboarding");
+    } else {
+      setSuccess("Account created! Check your email to confirm, then sign in.");
+    }
     setLoading(false);
   };
 
@@ -88,7 +95,7 @@ export default function SignupPage() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: `${window.location.origin}/auth/callback?new=1`,
       },
     });
 
@@ -106,7 +113,7 @@ export default function SignupPage() {
     >
       <div className="mb-6">
         <h1 className="text-3xl font-black text-text-primary mb-2">Create your account</h1>
-        <p className="text-text-muted">Join 50,000+ Bollywood storytellers on ScriptMind AI.</p>
+        <p className="text-text-muted">Join 50,000+ filmmakers and storytellers on ScriptMind AI.</p>
       </div>
 
       {/* Perks */}

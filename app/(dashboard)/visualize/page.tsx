@@ -13,6 +13,7 @@ import {
   Palette,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { CreditBadge } from "@/components/ui/CreditBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
 const styleOptions = [
@@ -103,7 +104,10 @@ export default function VisualizePage() {
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20 flex items-center justify-center">
             <Camera className="w-5 h-5 text-violet-400" />
           </div>
-          <h1 className="text-3xl font-black text-text-primary">Visualize Your Scene</h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-text-primary">Visualize Your Scene</h1>
+            <CreditBadge cost={3} label="credits per image" />
+          </div>
         </div>
         <p className="text-text-muted ml-[52px]">
           Generate cinematic images from your screenplay scenes using AI.

@@ -5,14 +5,14 @@
  * Reads access state from useFinanceAccess() and drives all UI states.
  *
  * States:
- *   isPro    → "Generate Report"           [enabled]
- *   isTrial  → "⚡ Generate Free Report (1 of 1)"  [enabled]
- *   isLocked → "🔒 Free Report Used — Upgrade to Pro"  [disabled → /pricing]
+ *   isPaid   → "Generate Report (5 credits)"   [enabled, credit-based]
+ *   isTrial  → "Generate Free Report (1 of 1)" [enabled, no credit cost]
+ *   isLocked → "Free Report Used — Upgrade"    [disabled → /pricing]
  */
 
 import React, { useState } from "react";
 import Link from "next/link";
-import { Loader2, Zap, Lock } from "lucide-react";
+import { Loader2, Zap, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFinanceAccess } from "@/hooks/useFinanceAccess";
 import FinanceReport from "./FinanceReport";
@@ -29,7 +29,7 @@ interface GenerateButtonProps {
 }
 
 export default function GenerateButton({ payload, className }: GenerateButtonProps) {
-  const { isLoading, isPro, isTrial, isLocked, refresh } = useFinanceAccess();
+  const { isLoading, isPaid, isTrial, isLocked, refresh } = useFinanceAccess();
   const [generating, setGenerating]   = useState(false);
   const [result,     setResult]       = useState<FinanceReportResponse | null>(null);
   const [errorMsg,   setErrorMsg]     = useState<string | null>(null);
@@ -72,27 +72,6 @@ export default function GenerateButton({ payload, className }: GenerateButtonPro
     }
   }
 
-  // ── Locked state — direct to pricing ──────────────────────────────────────
-  if (isLocked) {
-    return (
-      <div className={className}>
-        <Button asChild variant="secondary" disabled className="opacity-60 cursor-not-allowed">
-          <Link href="/pricing" onClick={(e) => e.stopPropagation()}>
-            <Lock className="w-4 h-4 mr-2" />
-            Free Report Used — Upgrade to Pro
-          </Link>
-        </Button>
-        <p className="text-xs text-text-muted mt-2">
-          You&apos;ve used your 1 free Finance Studio report.{" "}
-          <Link href="/pricing" className="text-accent underline underline-offset-2">
-            Upgrade to Pro
-          </Link>{" "}
-          for unlimited access.
-        </p>
-      </div>
-    );
-  }
-
   // ── Loading skeleton ───────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -102,8 +81,39 @@ export default function GenerateButton({ payload, className }: GenerateButtonPro
     );
   }
 
+  // ── Locked state (free plan, trial exhausted) ──────────────────────────────
+  if (isLocked) {
+    return (
+      <div className={`flex flex-col items-center gap-3 ${className ?? ""}`}>
+        {/* Disabled generate button */}
+        <div className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-border bg-surface-2 text-text-muted text-sm font-medium opacity-60 cursor-not-allowed select-none">
+          <Lock className="w-4 h-4" />
+          Free Report Used
+        </div>
+
+        {/* Upgrade CTA */}
+        <Link
+          href="/settings?tab=billing"
+          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-bold text-white transition-all duration-200 hover:opacity-90 active:scale-95"
+          style={{ background: "linear-gradient(135deg, #6366F1, #8B5CF6)" }}
+        >
+          <Zap className="w-4 h-4 fill-current" />
+          Upgrade to Basic or Pro
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
+
+        <p className="text-xs text-text-muted text-center">
+          5 credits per report · unlimited generations ·{" "}
+          <Link href="/pricing" className="text-accent underline underline-offset-2 hover:text-accent/80">
+            Compare plans
+          </Link>
+        </p>
+      </div>
+    );
+  }
+
   // ── Active states ──────────────────────────────────────────────────────────
-  const label = isPro
+  const label = isPaid
     ? "Generate Report"
     : "Generate Free Report (1 of 1)";
 
@@ -115,13 +125,18 @@ export default function GenerateButton({ payload, className }: GenerateButtonPro
 
   return (
     <div className={className}>
-      <Button
-        onClick={handleGenerate}
-        disabled={generating}
-        leftIcon={icon ?? undefined}
-      >
-        {generating ? "Generating…" : label}
-      </Button>
+      <div className="flex items-center gap-3 flex-wrap">
+        <Button
+          onClick={handleGenerate}
+          disabled={generating}
+          leftIcon={icon ?? undefined}
+        >
+          {generating ? "Generating…" : label}
+        </Button>
+        {isPaid && !generating && (
+          <span className="text-xs text-text-muted">5 credits per report</span>
+        )}
+      </div>
 
       {/* Error toast inline */}
       {errorMsg && (

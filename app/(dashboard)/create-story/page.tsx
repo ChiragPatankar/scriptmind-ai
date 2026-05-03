@@ -2,45 +2,184 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { PenTool, Sparkles, Film, Users, MapPin, Wand2, ChevronRight, CheckCircle2, AlertCircle, RefreshCw } from "lucide-react";
+import {
+  PenTool, Sparkles, Film, Users, MapPin, Wand2,
+  ChevronRight, CheckCircle2, AlertCircle, RefreshCw,
+  Target, Clock, Download, Copy, BookOpen, Layers,
+  FileText, X, Zap, ChevronDown, ChevronUp,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import type { StoryOutline } from "@/lib/gemini-api";
+import { CreditBadge } from "@/components/ui/CreditBadge";
+import { cn } from "@/lib/utils";
+import type { StoryOutline, FullScript } from "@/lib/gemini-api";
 
-const genres = ["Romantic Drama", "Action Thriller", "Comedy", "Period Drama", "Crime", "Horror", "Sci-Fi", "Social Drama", "Family", "Heist"];
-const tones = ["Intense", "Light-Hearted", "Dark", "Inspiring", "Bittersweet", "Epic", "Quirky"];
-const settings = ["Mumbai", "Delhi", "Rajasthan", "Village India", "Abroad", "Flashback India", "Near Future"];
+// ── Data ──────────────────────────────────────────────────────────────────────
+
+const GENRES = [
+  { label: "Romantic Drama",   emoji: "💕" },
+  { label: "Action Thriller",  emoji: "🔫" },
+  { label: "Comedy",           emoji: "😄" },
+  { label: "Period Drama",     emoji: "🏰" },
+  { label: "Crime",            emoji: "🕵️" },
+  { label: "Horror",           emoji: "👻" },
+  { label: "Sci-Fi",           emoji: "🚀" },
+  { label: "Social Drama",     emoji: "✊" },
+  { label: "Family",           emoji: "👨‍👩‍👧" },
+  { label: "Heist",            emoji: "💎" },
+  { label: "Biographical",     emoji: "📖" },
+  { label: "Supernatural",     emoji: "🌑" },
+];
+
+const TONES = [
+  { label: "Intense",        color: "red"    },
+  { label: "Light-Hearted",  color: "yellow" },
+  { label: "Dark",           color: "gray"   },
+  { label: "Inspiring",      color: "blue"   },
+  { label: "Bittersweet",    color: "purple" },
+  { label: "Epic",           color: "orange" },
+  { label: "Quirky",         color: "green"  },
+  { label: "Satirical",      color: "pink"   },
+];
+
+const SETTINGS = [
+  { label: "Mumbai",         emoji: "🌆" },
+  { label: "Delhi",          emoji: "🏛️" },
+  { label: "Rajasthan",      emoji: "🐪" },
+  { label: "Village India",  emoji: "🌾" },
+  { label: "Abroad",         emoji: "✈️" },
+  { label: "Flashback India", emoji: "⏮️" },
+  { label: "Near Future",    emoji: "🌐" },
+  { label: "Multiple Locations", emoji: "🗺️" },
+];
+
+const AUDIENCES = ["Mass", "Multiplex", "OTT / Streaming", "Family", "Youth", "International"];
+const THEMES    = ["Revenge", "Redemption", "Love & Sacrifice", "Identity", "Power & Corruption", "Survival", "Coming of Age", "Class Struggle", "Loyalty vs Truth"];
+const RUNTIMES  = [
+  { id: "short",    label: "Short Film", desc: "< 40 min"    },
+  { id: "feature",  label: "Feature",    desc: "90–120 min"  },
+  { id: "series",   label: "Mini-Series",desc: "6–8 episodes"},
+];
+
+type RuntimeType = "short" | "feature" | "series";
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+const TONE_CLASSES: Record<string, { active: string; hover: string }> = {
+  red:    { active: "bg-red-500/20 border-red-500/40 text-red-400",       hover: "hover:border-red-500/20"    },
+  yellow: { active: "bg-yellow-500/20 border-yellow-500/40 text-yellow-400", hover: "hover:border-yellow-500/20" },
+  gray:   { active: "bg-zinc-500/20 border-zinc-500/40 text-zinc-400",     hover: "hover:border-zinc-500/20"   },
+  blue:   { active: "bg-blue-500/20 border-blue-500/40 text-blue-400",     hover: "hover:border-blue-500/20"   },
+  purple: { active: "bg-purple-500/20 border-purple-500/40 text-purple-400",hover: "hover:border-purple-500/20" },
+  orange: { active: "bg-orange-500/20 border-orange-500/40 text-orange-400",hover: "hover:border-orange-500/20" },
+  green:  { active: "bg-emerald-500/20 border-emerald-500/40 text-emerald-400",hover:"hover:border-emerald-500/20"},
+  pink:   { active: "bg-pink-500/20 border-pink-500/40 text-pink-400",     hover: "hover:border-pink-500/20"   },
+};
+
+function SectionBox({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+      <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border">
+        {icon}
+        <h3 className="text-sm font-bold text-text-primary">{title}</h3>
+      </div>
+      <div className="p-4">{children}</div>
+    </div>
+  );
+}
+
+// ── Character card in output ───────────────────────────────────────────────────
+
+const CHAR_COLORS = ["text-accent", "text-pink-400", "text-emerald-400", "text-amber-400", "text-cyan-400"];
+const CHAR_BG     = ["bg-accent/10 border-accent/20", "bg-pink-500/10 border-pink-500/20", "bg-emerald-500/10 border-emerald-500/20", "bg-amber-500/10 border-amber-500/20", "bg-cyan-500/10 border-cyan-500/20"];
+
+// ── Scene Block (used in full-script modal) ───────────────────────────────────
+
+function SceneBlock({ scene, index }: { scene: import("@/lib/gemini-api").ScriptScene; index: number }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="rounded-xl border border-border overflow-hidden">
+      {/* Heading */}
+      <button
+        onClick={() => setOpen((v) => !v)}
+        className="w-full flex items-center justify-between px-4 py-3 bg-surface-2 hover:bg-surface-2/80 transition-all text-left"
+      >
+        <div className="flex items-center gap-2.5">
+          <span className="text-[10px] font-bold text-text-muted w-5 text-right flex-shrink-0">{index + 1}</span>
+          <span className="text-xs font-black text-text-primary tracking-widest uppercase">{scene.heading}</span>
+        </div>
+        {open ? <ChevronUp className="w-3.5 h-3.5 text-text-muted" /> : <ChevronDown className="w-3.5 h-3.5 text-text-muted" />}
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            initial={{ height: 0 }}
+            animate={{ height: "auto" }}
+            exit={{ height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="px-6 py-4 space-y-4">
+              {/* Action */}
+              {scene.action && (
+                <p className="text-xs text-text-muted leading-relaxed italic">{scene.action}</p>
+              )}
+              {/* Exchanges */}
+              {scene.exchanges.map((ex, ei) => (
+                <div key={ei} className="space-y-0.5">
+                  <p className="text-center text-xs font-black text-text-primary tracking-widest">{ex.character}</p>
+                  {ex.direction && (
+                    <p className="text-center text-[11px] text-text-muted italic">({ex.direction})</p>
+                  )}
+                  <p className="text-center text-sm text-text-secondary leading-relaxed max-w-sm mx-auto">{ex.dialogue}</p>
+                </div>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+// ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function CreateStoryPage() {
-  const [title, setTitle] = useState("");
-  const [premise, setPremise] = useState("");
-  const [genre, setGenre] = useState("Romantic Drama");
-  const [tone, setTone] = useState("Intense");
-  const [setting, setSetting] = useState("Mumbai");
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [storyOutline, setStoryOutline] = useState<StoryOutline | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [title,     setTitle]     = useState("");
+  const [premise,   setPremise]   = useState("");
+  const [genre,     setGenre]     = useState("Romantic Drama");
+  const [tone,      setTone]      = useState("Intense");
+  const [setting,   setSetting]   = useState("Mumbai");
+  const [audience,  setAudience]  = useState("Multiplex");
+  const [theme,     setTheme]     = useState("Love & Sacrifice");
+  const [runtime,   setRuntime]   = useState<RuntimeType>("feature");
+
+  const [isGenerating,  setIsGenerating]  = useState(false);
+  const [storyOutline,  setStoryOutline]  = useState<StoryOutline | null>(null);
+  const [error,         setError]         = useState<string | null>(null);
+  const [copied,        setCopied]        = useState(false);
+
+  // Full script expansion
+  const [showConfirm,   setShowConfirm]   = useState(false);
+  const [isExpanding,   setIsExpanding]   = useState(false);
+  const [fullScript,    setFullScript]    = useState<FullScript | null>(null);
+  const [expandError,   setExpandError]   = useState<string | null>(null);
+  const [scriptModal,   setScriptModal]   = useState(false);
 
   const generate = async () => {
     setIsGenerating(true);
     setError(null);
     setStoryOutline(null);
-
     try {
       const res = await fetch("/api/story", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, premise, genre, tone, setting }),
       });
-
       const data = await res.json() as StoryOutline & { error?: string };
-
-      if (!res.ok) {
-        throw new Error(data.error ?? `Request failed (${res.status})`);
-      }
-
+      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
       setStoryOutline(data);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong. Please try again.");
@@ -49,27 +188,217 @@ export default function CreateStoryPage() {
     }
   };
 
+  const copyOutline = async () => {
+    if (!storyOutline) return;
+    const lines = [
+      `TITLE: ${storyOutline.title}`,
+      `LOGLINE: ${storyOutline.logline}`,
+      "",
+      ...storyOutline.acts.flatMap((act) => [
+        `\n${act.label.toUpperCase()}`,
+        ...act.scenes.map((s, i) => `  ${i + 1}. ${s}`),
+      ]),
+      "",
+      "CHARACTERS:",
+      ...storyOutline.characters.map((c) => `  ${c.name} (${c.role}): ${c.arc}`),
+    ];
+    await navigator.clipboard.writeText(lines.join("\n"));
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const exportOutline = () => {
+    if (!storyOutline) return;
+    const lines = [
+      `TITLE: ${storyOutline.title}`,
+      `GENRE: ${genre}  |  TONE: ${tone}  |  SETTING: ${setting}`,
+      `LOGLINE: ${storyOutline.logline}`,
+      "\n" + "─".repeat(60),
+      ...storyOutline.acts.flatMap((act) => [
+        `\n${act.label.toUpperCase()}`,
+        ...act.scenes.map((s, i) => `  ${i + 1}. ${s}`),
+      ]),
+      "\n" + "─".repeat(60),
+      "\nCHARACTERS:",
+      ...storyOutline.characters.map((c) => `  ${c.name} (${c.role})\n    Arc: ${c.arc}`),
+    ];
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `${(storyOutline.title || "story").replace(/\s+/g, "_")}_outline.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const expandToScript = async () => {
+    if (!storyOutline) return;
+    setShowConfirm(false);
+    setIsExpanding(true);
+    setExpandError(null);
+    setFullScript(null);
+    try {
+      const res = await fetch("/api/story/expand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ outline: storyOutline, genre, tone, setting, language: "Hinglish" }),
+      });
+      const data = await res.json() as FullScript & { error?: string };
+      if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
+      setFullScript(data);
+      setScriptModal(true);
+    } catch (err) {
+      setExpandError(err instanceof Error ? err.message : "Expansion failed. Please try again.");
+    } finally {
+      setIsExpanding(false);
+    }
+  };
+
+  const exportFullScript = () => {
+    if (!fullScript) return;
+    const lines: string[] = [
+      fullScript.title.toUpperCase(),
+      "",
+      `Genre: ${fullScript.genre}`,
+      `Logline: ${fullScript.logline}`,
+      "",
+      "─".repeat(60),
+      "",
+    ];
+    for (const scene of fullScript.scenes) {
+      lines.push(scene.heading.toUpperCase());
+      lines.push("");
+      if (scene.action) { lines.push(scene.action); lines.push(""); }
+      for (const ex of scene.exchanges) {
+        lines.push(`                    ${ex.character}`);
+        if (ex.direction) lines.push(`               (${ex.direction})`);
+        lines.push(`          ${ex.dialogue}`);
+        lines.push("");
+      }
+      lines.push("─".repeat(40));
+      lines.push("");
+    }
+    const blob = new Blob([lines.join("\n")], { type: "text/plain" });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement("a");
+    a.href = url;
+    a.download = `${fullScript.title.replace(/\s+/g, "_")}_SCRIPT.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const selectedToneColor = TONES.find((t) => t.label === tone)?.color ?? "blue";
+
   return (
     <div>
-      <motion.div
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-8"
-      >
-        <h1 className="text-3xl font-black text-text-primary mb-1">Create Story</h1>
-        <p className="text-text-muted">Transform your idea into a complete Bollywood screenplay outline.</p>
+      {/* ── Confirm modal ── */}
+      <AnimatePresence>
+        {showConfirm && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={() => setShowConfirm(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 12 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              className="relative w-full max-w-sm rounded-2xl border border-border bg-surface shadow-2xl p-6 z-10"
+            >
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-9 h-9 rounded-xl bg-gold/10 border border-gold/20 flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-gold" />
+                  </div>
+                  <h3 className="text-base font-bold text-text-primary">Expand to Full Script</h3>
+                </div>
+                <button onClick={() => setShowConfirm(false)} className="text-text-muted hover:text-text-primary">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+              <p className="text-sm text-text-muted leading-relaxed mb-4">
+                This will generate a complete screenplay with scene headings, action lines, and full dialogue for all three acts.
+              </p>
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-amber-500/10 border border-amber-500/20 mb-5">
+                <Zap className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <p className="text-sm font-semibold text-amber-400">6 credits will be deducted</p>
+              </div>
+              <div className="flex gap-3">
+                <Button variant="secondary" className="flex-1" onClick={() => setShowConfirm(false)}>Cancel</Button>
+                <Button className="flex-1" onClick={expandToScript} leftIcon={<Sparkles className="w-3.5 h-3.5" />}>
+                  Confirm & Generate
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Full Script Modal ── */}
+      <AnimatePresence>
+        {scriptModal && fullScript && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={() => setScriptModal(false)} />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.97, y: 16 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.97 }}
+              className="relative w-full max-w-3xl rounded-2xl border border-border bg-surface shadow-2xl z-10 flex flex-col max-h-[90vh]"
+            >
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
+                <div>
+                  <h2 className="text-lg font-black text-text-primary">{fullScript.title}</h2>
+                  <p className="text-xs text-text-muted italic mt-0.5">&ldquo;{fullScript.logline}&rdquo;</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button onClick={exportFullScript}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-accent/15 border border-accent/30 text-accent hover:bg-accent/25 transition-all">
+                    <Download className="w-3.5 h-3.5" /> Export .txt
+                  </button>
+                  <button onClick={() => setScriptModal(false)}
+                    className="w-8 h-8 flex items-center justify-center rounded-lg text-text-muted hover:text-text-primary hover:bg-surface-2 transition-all">
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Script content */}
+              <div className="flex-1 overflow-y-auto p-6 space-y-6 font-mono text-sm">
+                {fullScript.scenes.map((scene, si) => (
+                  <SceneBlock key={si} scene={scene} index={si} />
+                ))}
+              </div>
+
+              <div className="px-6 py-3 border-t border-border flex items-center justify-between flex-shrink-0">
+                <p className="text-xs text-text-muted">{fullScript.scenes.length} scenes · {fullScript.genre}</p>
+                <Button size="sm" onClick={exportFullScript} leftIcon={<Download className="w-3.5 h-3.5" />}>
+                  Download Script
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Header */}
+      <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+        <div className="flex items-center gap-2 mb-1">
+          <h1 className="text-3xl font-black text-text-primary">Create Story</h1>
+          <CreditBadge cost={2} label="credits per story" />
+        </div>
+        <p className="text-text-muted text-sm">Transform your idea into a complete, structured screenplay outline with AI.</p>
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-        {/* Input Form */}
+
+        {/* ── Left Panel ── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="lg:col-span-2 space-y-5"
+          className="lg:col-span-2 space-y-4"
         >
-          <Card variant="default" hover={false}>
-            <CardContent className="p-5 space-y-4">
+          {/* Core Idea */}
+          <SectionBox icon={<BookOpen className="w-4 h-4 text-gold" />} title="Story Idea">
+            <div className="space-y-4">
               <Input
                 label="Story Title"
                 placeholder="e.g. Ek Raat Mumbai Mein"
@@ -78,96 +407,134 @@ export default function CreateStoryPage() {
                 leftIcon={<Film className="w-4 h-4" />}
               />
               <div>
-                <label className="text-sm font-medium text-text-secondary block mb-1.5">Story Premise</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-text-muted uppercase tracking-wider">Story Premise</label>
+                  <span className="text-[10px] text-text-muted">{premise.length}/400</span>
+                </div>
                 <textarea
                   value={premise}
-                  onChange={(e) => setPremise(e.target.value)}
+                  onChange={(e) => { if (e.target.value.length <= 400) setPremise(e.target.value); }}
                   rows={4}
-                  placeholder="Describe your core story idea in 2-3 sentences..."
+                  placeholder="Describe your core story idea in 2–3 sentences. What's the central conflict? Who is the protagonist? What's at stake?"
                   className="w-full rounded-xl px-4 py-3 bg-surface-2 border border-border text-sm text-text-primary placeholder:text-text-muted resize-none outline-none focus:border-accent/50 focus:ring-2 focus:ring-accent/20 transition-all"
                 />
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </SectionBox>
 
-          <Card variant="default" hover={false}>
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-base">
-                <Film className="w-4 h-4 text-gold" />
-                Genre
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                {genres.map((g) => (
-                  <button
-                    key={g}
-                    onClick={() => setGenre(g)}
-                    className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                      genre === g
-                        ? "bg-gold/20 border border-gold/40 text-gold"
-                        : "bg-surface-2 border border-border text-text-muted hover:border-gold/20"
-                    }`}
-                  >
-                    {g}
-                  </button>
-                ))}
+          {/* Genre */}
+          <SectionBox icon={<Film className="w-4 h-4 text-gold" />} title="Genre">
+            <div className="flex flex-wrap gap-2">
+              {GENRES.map(({ label, emoji }) => (
+                <button key={label} type="button" onClick={() => setGenre(label)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
+                    genre === label
+                      ? "bg-gold/20 border border-gold/40 text-gold"
+                      : "bg-surface-2 border border-border text-text-muted hover:border-gold/20 hover:text-text-secondary"
+                  )}
+                >
+                  <span>{emoji}</span> {label}
+                </button>
+              ))}
+            </div>
+          </SectionBox>
+
+          {/* Tone */}
+          <SectionBox icon={<Layers className="w-4 h-4 text-accent" />} title="Tone">
+            <div className="flex flex-wrap gap-2">
+              {TONES.map(({ label, color }) => {
+                const cls = TONE_CLASSES[color]!;
+                return (
+                  <button key={label} type="button" onClick={() => setTone(label)}
+                    className={cn(
+                      "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                      tone === label
+                        ? cls.active
+                        : `bg-surface-2 border-border text-text-muted ${cls.hover}`
+                    )}
+                  >{label}</button>
+                );
+              })}
+            </div>
+          </SectionBox>
+
+          {/* Setting */}
+          <SectionBox icon={<MapPin className="w-4 h-4 text-secondary" />} title="Setting">
+            <div className="flex flex-wrap gap-2">
+              {SETTINGS.map(({ label, emoji }) => (
+                <button key={label} type="button" onClick={() => setSetting(label)}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                    setting === label
+                      ? "bg-secondary/20 border-secondary/40 text-secondary"
+                      : "bg-surface-2 border-border text-text-muted hover:border-secondary/20 hover:text-text-secondary"
+                  )}
+                >
+                  <span>{emoji}</span> {label}
+                </button>
+              ))}
+            </div>
+          </SectionBox>
+
+          {/* Advanced */}
+          <SectionBox icon={<Target className="w-4 h-4 text-pink-400" />} title="Advanced Parameters">
+            <div className="space-y-4">
+
+              <div>
+                <p className="text-xs text-text-muted font-medium mb-2">Target Audience</p>
+                <div className="flex flex-wrap gap-2">
+                  {AUDIENCES.map((a) => (
+                    <button key={a} type="button" onClick={() => setAudience(a)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                        audience === a
+                          ? "bg-pink-500/20 border-pink-500/40 text-pink-400"
+                          : "bg-surface-2 border-border text-text-muted hover:border-pink-500/20"
+                      )}
+                    >{a}</button>
+                  ))}
+                </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <div className="grid grid-cols-2 gap-4">
-            <Card variant="default" hover={false}>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm">Tone</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-1.5">
-                  {tones.map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setTone(t)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-left ${
-                        tone === t
-                          ? "bg-accent/15 border border-accent/30 text-accent"
-                          : "text-text-muted hover:text-text-secondary hover:bg-surface-2"
-                      }`}
+              <div>
+                <p className="text-xs text-text-muted font-medium mb-2">Core Theme</p>
+                <div className="flex flex-wrap gap-2">
+                  {THEMES.map((t) => (
+                    <button key={t} type="button" onClick={() => setTheme(t)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                        theme === t
+                          ? "bg-violet-500/20 border-violet-500/40 text-violet-400"
+                          : "bg-surface-2 border-border text-text-muted hover:border-violet-500/20"
+                      )}
+                    >{t}</button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <p className="text-xs text-text-muted font-medium mb-2">
+                  <Clock className="w-3 h-3 inline mr-1" />Runtime / Format
+                </p>
+                <div className="grid grid-cols-3 gap-2">
+                  {RUNTIMES.map((r) => (
+                    <button key={r.id} type="button" onClick={() => setRuntime(r.id as RuntimeType)}
+                      className={cn(
+                        "flex flex-col items-center py-2.5 px-2 rounded-xl border text-xs font-medium transition-all",
+                        runtime === r.id
+                          ? "border-accent/50 bg-accent/10 text-accent"
+                          : "border-border bg-surface-2 text-text-muted hover:border-accent/20"
+                      )}
                     >
-                      {tone === t && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
-                      {t}
+                      <span className="font-bold">{r.label}</span>
+                      <span className="text-[10px] opacity-60 mt-0.5">{r.desc}</span>
                     </button>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card variant="default" hover={false}>
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-sm">
-                  <MapPin className="w-3.5 h-3.5" />
-                  Setting
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-col gap-1.5">
-                  {settings.map((s) => (
-                    <button
-                      key={s}
-                      onClick={() => setSetting(s)}
-                      className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium transition-all text-left ${
-                        setting === s
-                          ? "bg-secondary/15 border border-secondary/30 text-secondary"
-                          : "text-text-muted hover:text-text-secondary hover:bg-surface-2"
-                      }`}
-                    >
-                      {setting === s && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
-                      {s}
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+            </div>
+          </SectionBox>
 
           <Button
             onClick={generate}
@@ -176,141 +543,229 @@ export default function CreateStoryPage() {
             className="w-full"
             leftIcon={<Wand2 className="w-4 h-4" />}
           >
-            {isGenerating ? "Crafting Your Story..." : "Generate Story Outline"}
+            {isGenerating ? "Crafting Your Story…" : "Generate Story Outline"}
           </Button>
         </motion.div>
 
-        {/* Story Output */}
+        {/* ── Right Panel ── */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
           className="lg:col-span-3"
         >
-          <Card variant="default" hover={false} className="h-full min-h-[600px]">
-            <CardHeader className="border-b border-border">
-              <div className="flex items-center justify-between">
-                <CardTitle className="flex items-center gap-2">
-                  <PenTool className="w-5 h-5 text-gold" />
-                  Story Outline
-                </CardTitle>
+          <div className="rounded-2xl border border-border bg-surface overflow-hidden h-full min-h-[620px] flex flex-col">
+            {/* Panel header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
+              <div className="flex items-center gap-2">
+                <PenTool className="w-4 h-4 text-gold" />
+                <h3 className="text-sm font-bold text-text-primary">Story Outline</h3>
                 {storyOutline && (
-                  <div className="flex items-center gap-2">
-                    <Badge variant="success">
-                      <CheckCircle2 className="w-3 h-3 mr-1" />
-                      Generated
-                    </Badge>
-                  </div>
+                  <Badge variant="success" className="ml-1">
+                    <CheckCircle2 className="w-3 h-3 mr-1" /> Generated
+                  </Badge>
                 )}
               </div>
-            </CardHeader>
-            <CardContent className="p-6">
+              {storyOutline && (
+                <div className="flex items-center gap-1.5">
+                  <button onClick={copyOutline}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-surface-2 border border-border text-text-muted hover:text-text-primary hover:border-accent/30 transition-all">
+                    {copied ? <CheckCircle2 className="w-3 h-3 text-green-400" /> : <Copy className="w-3 h-3" />}
+                    {copied ? "Copied!" : "Copy"}
+                  </button>
+                  <button onClick={exportOutline}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-surface-2 border border-border text-text-muted hover:text-text-primary hover:border-accent/30 transition-all">
+                    <Download className="w-3 h-3" /> Export
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 p-6 overflow-y-auto">
               <AnimatePresence mode="wait">
+
                 {error ? (
-                  <motion.div
-                    key="error"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0 }}
-                    className="flex flex-col items-center justify-center h-80 text-center gap-4"
-                  >
-                    <div className="w-16 h-16 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-                      <AlertCircle className="w-8 h-8 text-red-400" />
+                  <motion.div key="error" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center h-full text-center gap-4 py-20">
+                    <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+                      <AlertCircle className="w-7 h-7 text-red-400" />
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-text-primary mb-1">Generation Failed</p>
                       <p className="text-sm text-text-muted max-w-xs leading-relaxed">{error}</p>
                     </div>
-                    <Button variant="secondary" size="sm" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
-                      Try Again
-                    </Button>
+                    <Button variant="secondary" size="sm" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>Try Again</Button>
                   </motion.div>
+
                 ) : !storyOutline ? (
-                  <motion.div
-                    key="empty"
-                    className="flex flex-col items-center justify-center h-80 text-center"
-                  >
-                    <div className="w-16 h-16 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center mb-4">
+                  <motion.div key="empty" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                    className="flex flex-col items-center justify-center h-full text-center gap-6 py-20">
+                    <div className="w-16 h-16 rounded-2xl bg-gold/10 border border-gold/20 flex items-center justify-center">
                       <PenTool className="w-8 h-8 text-gold/50" />
                     </div>
-                    <p className="text-text-muted text-sm max-w-xs leading-relaxed">
-                      Fill in the story details, pick your genre and tone, then let AI craft your Bollywood outline.
-                    </p>
-                  </motion.div>
-                ) : (
-                  <motion.div
-                    key="story"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    className="space-y-7"
-                  >
-                    {/* Title & Logline */}
                     <div>
-                      <div className="flex items-center gap-3 mb-2">
-                        <h2 className="text-2xl font-black text-text-primary">{storyOutline.title}</h2>
-                        <Badge variant="warning">{genre}</Badge>
-                      </div>
-                      <p className="text-sm text-text-secondary italic leading-relaxed border-l-2 border-gold pl-4">
-                        &ldquo;{storyOutline.logline}&rdquo;
+                      <p className="text-base font-semibold text-text-primary mb-1">Your story outline will appear here</p>
+                      <p className="text-sm text-text-muted max-w-xs leading-relaxed">
+                        Fill in your idea, pick a genre and tone, then hit{" "}
+                        <span className="text-gold font-medium">Generate Story Outline</span>
                       </p>
                     </div>
-
-                    {/* Three Acts */}
-                    <div className="space-y-5">
-                      {storyOutline.acts.map((act, i) => (
-                        <motion.div
-                          key={act.label}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: i * 0.15 + 0.2 }}
-                        >
-                          <h3 className="text-sm font-bold text-gold mb-3 flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-gold/20 flex items-center justify-center text-[10px] font-black">{i + 1}</span>
-                            {act.label}
-                          </h3>
-                          <div className="space-y-2 pl-7">
-                            {act.scenes.map((scene, j) => (
-                              <div key={j} className="flex items-start gap-2.5 text-sm text-text-secondary">
-                                <ChevronRight className="w-3.5 h-3.5 text-text-muted flex-shrink-0 mt-0.5" />
-                                {scene}
-                              </div>
-                            ))}
-                          </div>
-                        </motion.div>
+                    {/* "What you'll get" chips */}
+                    <div className="flex flex-wrap justify-center gap-2 max-w-sm">
+                      {["Story Title & Logline", "3-Act Structure", "Scene Breakdowns", "Character Arcs", "Export to .txt"].map((item) => (
+                        <span key={item} className="text-xs px-3 py-1.5 rounded-full bg-surface-2 border border-border text-text-muted">
+                          ✓ {item}
+                        </span>
                       ))}
+                    </div>
+                    {/* Current selection preview */}
+                    <div className="flex flex-wrap justify-center gap-2">
+                      <Badge variant="warning">{genre}</Badge>
+                      <Badge variant="default">{tone}</Badge>
+                      <Badge variant="secondary">{setting}</Badge>
+                    </div>
+                  </motion.div>
+
+                ) : (
+                  <motion.div key="story" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-7">
+
+                    {/* Title & meta */}
+                    <div className="pb-5 border-b border-border">
+                      <div className="flex flex-wrap items-start gap-3 mb-3">
+                        <h2 className="text-2xl font-black text-text-primary leading-tight">{storyOutline.title}</h2>
+                        <div className="flex flex-wrap gap-1.5 mt-1">
+                          <Badge variant="warning">{genre}</Badge>
+                          <Badge variant="default"
+                            className={cn(TONE_CLASSES[selectedToneColor]?.active.replace("border-", "border ") ?? "")}>
+                            {tone}
+                          </Badge>
+                          <Badge variant="outline">{setting}</Badge>
+                        </div>
+                      </div>
+                      <blockquote className="border-l-2 border-gold pl-4 text-sm text-text-secondary italic leading-relaxed">
+                        &ldquo;{storyOutline.logline}&rdquo;
+                      </blockquote>
+                    </div>
+
+                    {/* Acts */}
+                    <div className="space-y-6">
+                      <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2">
+                        <Layers className="w-3.5 h-3.5" /> Three-Act Structure
+                      </h3>
+                      {storyOutline.acts.map((act, i) => {
+                        const accentColors = ["text-gold", "text-accent", "text-secondary"];
+                        const bgColors     = ["bg-gold/10 border-gold/20", "bg-accent/10 border-accent/20", "bg-secondary/10 border-secondary/20"];
+                        return (
+                          <motion.div key={act.label}
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.12 + 0.1 }}
+                          >
+                            <div className="flex items-center gap-2.5 mb-3">
+                              <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-black border", bgColors[i])}>
+                                <span className={accentColors[i]}>{i + 1}</span>
+                              </div>
+                              <h4 className={cn("text-sm font-bold", accentColors[i])}>{act.label}</h4>
+                            </div>
+                            <div className="space-y-2 pl-9">
+                              {act.scenes.map((scene, j) => (
+                                <div key={j} className="flex items-start gap-2.5">
+                                  <ChevronRight className="w-3.5 h-3.5 text-text-muted flex-shrink-0 mt-0.5" />
+                                  <p className="text-sm text-text-secondary leading-relaxed">{scene}</p>
+                                </div>
+                              ))}
+                            </div>
+                          </motion.div>
+                        );
+                      })}
                     </div>
 
                     {/* Characters */}
                     <div>
-                      <h3 className="text-sm font-bold text-text-primary flex items-center gap-2 mb-3">
-                        <Users className="w-4 h-4 text-accent" />
-                        Key Characters
+                      <h3 className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-2 mb-3">
+                        <Users className="w-3.5 h-3.5" /> Key Characters
                       </h3>
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        {storyOutline.characters.map((char) => (
-                          <div key={char.name} className="p-3.5 rounded-xl bg-surface-2 border border-border">
-                            <div className="text-sm font-bold text-text-primary">{char.name}</div>
-                            <div className="text-xs text-accent mb-1.5">{char.role}</div>
-                            <div className="text-xs text-text-muted leading-relaxed">{char.arc}</div>
-                          </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        {storyOutline.characters.map((char, i) => (
+                          <motion.div key={char.name}
+                            initial={{ opacity: 0, y: 6 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: i * 0.08 + 0.3 }}
+                            className={cn("p-4 rounded-xl border", CHAR_BG[i % CHAR_BG.length])}
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className={cn("w-7 h-7 rounded-full bg-surface flex items-center justify-center text-[11px] font-black", CHAR_COLORS[i % CHAR_COLORS.length])}>
+                                {char.name.charAt(0)}
+                              </div>
+                              <div>
+                                <p className="text-sm font-bold text-text-primary">{char.name}</p>
+                                <p className={cn("text-[10px] font-medium", CHAR_COLORS[i % CHAR_COLORS.length])}>{char.role}</p>
+                              </div>
+                            </div>
+                            <p className="text-xs text-text-muted leading-relaxed">{char.arc}</p>
+                          </motion.div>
                         ))}
                       </div>
                     </div>
 
-                    <div className="flex gap-3">
-                      <Button variant="secondary" size="sm" className="flex-1" onClick={generate} leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
+                    {/* Expand error */}
+                    {expandError && (
+                      <div className="flex items-start gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20">
+                        <AlertCircle className="w-4 h-4 text-red-400 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-red-400 leading-relaxed">{expandError}</p>
+                      </div>
+                    )}
+
+                    {/* Expanding progress */}
+                    {isExpanding && (
+                      <div className="flex items-center gap-3 px-4 py-3 rounded-xl bg-gold/10 border border-gold/20">
+                        <RefreshCw className="w-4 h-4 text-gold animate-spin flex-shrink-0" />
+                        <p className="text-xs text-gold font-medium">Writing your complete screenplay… this may take a moment.</p>
+                      </div>
+                    )}
+
+                    {/* Previously generated script shortcut */}
+                    {fullScript && !scriptModal && (
+                      <button onClick={() => setScriptModal(true)}
+                        className="w-full flex items-center justify-between px-4 py-3 rounded-xl bg-gold/10 border border-gold/20 hover:bg-gold/15 transition-all">
+                        <div className="flex items-center gap-2">
+                          <FileText className="w-4 h-4 text-gold" />
+                          <span className="text-sm font-semibold text-gold">Full script ready — view screenplay</span>
+                        </div>
+                        <ChevronRight className="w-4 h-4 text-gold" />
+                      </button>
+                    )}
+
+                    {/* Actions */}
+                    <div className="flex gap-3 pt-2 border-t border-border">
+                      <Button variant="secondary" size="sm" className="flex-1" onClick={generate} loading={isGenerating}
+                        leftIcon={<RefreshCw className="w-3.5 h-3.5" />}>
                         Regenerate
                       </Button>
-                      <Button size="sm" className="flex-1" leftIcon={<Sparkles className="w-3.5 h-3.5" />}>
-                        Expand to Full Script
+                      <Button size="sm" className="flex-1" onClick={exportOutline}
+                        leftIcon={<Download className="w-3.5 h-3.5" />}>
+                        Export Outline
+                      </Button>
+                      <Button
+                        size="sm" className="flex-1 relative"
+                        loading={isExpanding}
+                        onClick={() => setShowConfirm(true)}
+                        leftIcon={!isExpanding ? <Sparkles className="w-3.5 h-3.5" /> : undefined}
+                      >
+                        <span>{isExpanding ? "Writing…" : "Expand to Script"}</span>
+                        {!isExpanding && (
+                          <span className="ml-1.5 text-[10px] opacity-70 font-normal">(6cr)</span>
+                        )}
                       </Button>
                     </div>
                   </motion.div>
                 )}
               </AnimatePresence>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
         </motion.div>
+
       </div>
     </div>
   );

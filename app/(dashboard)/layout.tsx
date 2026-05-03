@@ -3,6 +3,7 @@
 import React from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import DashboardNavbar from "@/components/layout/DashboardNavbar";
+import SubscriptionExpiredBanner from "@/components/SubscriptionExpiredBanner";
 import { useUIStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +18,15 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-background overflow-x-hidden w-full">
       <Sidebar />
       <DashboardNavbar />
+      <div
+        className={cn(
+          "fixed top-16 left-0 right-0 z-40 transition-all duration-300",
+          "md:left-[68px]",
+          !sidebarCollapsed && "md:left-[240px]"
+        )}
+      >
+        <SubscriptionExpiredBanner />
+      </div>
       <main
         className={cn(
           "min-h-screen pt-16 transition-all duration-300 overflow-x-hidden",

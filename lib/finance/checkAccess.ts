@@ -6,16 +6,16 @@
 import { createAdminClient } from "@/lib/supabase-admin";
 
 export type FinanceAccessResult =
-  | { allowed: true;  tier: "pro" | "trial" }
-  | { allowed: false; code: "FINANCE_LOCKED" | "UPGRADE_REQUIRED" };
+  | { allowed: true;  tier: "paid" | "trial" }
+  | { allowed: false; code: "TRIAL_EXHAUSTED" };
 
 /**
- * Determines whether a user can generate a Finance Studio report.
+ * Finance Studio access logic:
  *
- * plan=pro                          → { allowed: true, tier: 'pro' }
- * plan=basic + trial unused         → { allowed: true, tier: 'trial' }
- * plan=basic + trial already used   → { allowed: false, code: 'FINANCE_LOCKED' }
- * plan=free (any trial state)       → { allowed: false, code: 'UPGRADE_REQUIRED' }
+ * free  + trial not used  → { allowed: true,  tier: 'trial' }  (1 free report, then locked)
+ * free  + trial used      → { allowed: false, code: 'TRIAL_EXHAUSTED' }
+ * basic + any             → { allowed: true,  tier: 'paid'  }  (5 credits per report)
+ * pro   + any             → { allowed: true,  tier: 'paid'  }  (5 credits per report)
  */
 export async function checkFinanceAccess(userId: string): Promise<FinanceAccessResult> {
   const admin = createAdminClient();
@@ -27,8 +27,8 @@ export async function checkFinanceAccess(userId: string): Promise<FinanceAccessR
     .single();
 
   if (error || !data) {
-    // Treat missing row as free-tier (safe default)
-    return { allowed: false, code: "UPGRADE_REQUIRED" };
+    // Row missing — give the benefit of the doubt (trial)
+    return { allowed: true, tier: "trial" };
   }
 
   const { plan, finance_trial_used } = data as {
@@ -36,16 +36,13 @@ export async function checkFinanceAccess(userId: string): Promise<FinanceAccessR
     finance_trial_used: boolean;
   };
 
-  if (plan === "pro") {
-    return { allowed: true, tier: "pro" };
+  // Basic + Pro: unlimited, credit-based
+  if (plan === "basic" || plan === "pro") {
+    return { allowed: true, tier: "paid" };
   }
 
-  if (plan === "basic") {
-    return finance_trial_used
-      ? { allowed: false, code: "FINANCE_LOCKED" }
-      : { allowed: true,  tier: "trial" };
-  }
-
-  // plan = 'free' or unknown
-  return { allowed: false, code: "UPGRADE_REQUIRED" };
+  // Free: 1 trial only
+  return finance_trial_used
+    ? { allowed: false, code: "TRIAL_EXHAUSTED" }
+    : { allowed: true,  tier: "trial" };
 }

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { CheckCircle2, Lock, Zap, Star, Building2, BarChart3, Brain, ArrowRight, Tag } from "lucide-react";
 import { cn } from "@/lib/utils";
 import Link from "next/link";
+import PlanCTAButton from "@/components/PlanCTAButton";
 
 // ─── Plan definitions ─────────────────────────────────────────────────────────
 
@@ -62,9 +63,9 @@ const plans: Plan[] = [
     cardBg: "rgba(107,114,128,0.04)",
     highlighted: false,
     aiLimits: [
-      { label: "Script Analysis", value: "2 / month" },
-      { label: "Create Story", value: "1 / month" },
-      { label: "AI Dialogue", value: "3 / month" },
+      { label: "Credits", value: "20 credits" },
+      { label: "Script Analysis", value: "2 cr each" },
+      { label: "AI Dialogue", value: "1 cr each" },
     ],
     features: [
       { text: "Basic script insights", included: true },
@@ -97,9 +98,9 @@ const plans: Plan[] = [
     cardBg: "rgba(14,165,233,0.04)",
     highlighted: false,
     aiLimits: [
-      { label: "Script Analysis", value: "15 / month" },
-      { label: "Create Story", value: "10 / month" },
-      { label: "AI Dialogue", value: "30 / month" },
+      { label: "Credits", value: "250 credits / mo" },
+      { label: "Script Analysis", value: "2 cr each" },
+      { label: "Finance Studio", value: "1 free trial" },
     ],
     features: [
       { text: "Full script insights", included: true },
@@ -107,7 +108,7 @@ const plans: Plan[] = [
       { text: "Character analysis", included: true },
       { text: "All languages + Urdu", included: true },
       { text: "Project management", included: true },
-      { text: "Finance Studio", locked: true },
+      { text: "Finance Studio (1 free trial)", included: true },
     ],
     cta: "Start Basic Plan",
     ctaHref: "/signup",
@@ -132,9 +133,9 @@ const plans: Plan[] = [
     cardBg: "linear-gradient(145deg, rgba(124,58,237,0.14), rgba(124,58,237,0.05))",
     highlighted: true,
     aiLimits: [
-      { label: "Script Analysis", value: "50 / month" },
-      { label: "Create Story", value: "40 / month" },
-      { label: "AI Dialogue", value: "100 / month" },
+      { label: "Credits", value: "700 credits / mo" },
+      { label: "Finance Studio", value: "Full access" },
+      { label: "Visualize Scene", value: "3 cr each" },
     ],
     features: [
       { text: "Everything in Basic", included: true },
@@ -185,18 +186,19 @@ const plans: Plan[] = [
 ];
 
 const comparisonRows = [
-  { feature: "Script Analysis / month", free: "2", basic: "15", pro: "50", enterprise: "High" },
-  { feature: "Create Story / month", free: "1", basic: "10", pro: "40", enterprise: "High" },
-  { feature: "AI Dialogue / month", free: "3", basic: "30", pro: "100", enterprise: "High" },
-  { feature: "Emotion Graphs", free: false, basic: true, pro: true, enterprise: true },
-  { feature: "Character Analysis", free: false, basic: true, pro: true, enterprise: true },
-  { feature: "Finance Studio", free: false, basic: false, pro: true, enterprise: true },
-  { feature: "Projection Engine", free: false, basic: false, pro: true, enterprise: true },
-  { feature: "ROI / NPV / IRR", free: false, basic: false, pro: true, enterprise: true },
-  { feature: "PDF Export", free: false, basic: false, pro: true, enterprise: true },
-  { feature: "Priority AI Processing", free: false, basic: false, pro: true, enterprise: true },
-  { feature: "API Access", free: false, basic: false, pro: false, enterprise: true },
-  { feature: "Team Accounts", free: false, basic: false, pro: false, enterprise: "Soon" },
+  { feature: "Credits / month",     free: "20",    basic: "250",        pro: "700",       enterprise: "Custom" },
+  { feature: "Script Analysis",     free: "2 cr",  basic: "2 cr",       pro: "2 cr",      enterprise: "2 cr" },
+  { feature: "Story Generation",    free: "2 cr",  basic: "2 cr",       pro: "2 cr",      enterprise: "2 cr" },
+  { feature: "AI Dialogue",         free: "1 cr",  basic: "1 cr",       pro: "1 cr",      enterprise: "1 cr" },
+  { feature: "Scene Visualizer",    free: "3 cr",  basic: "3 cr",       pro: "3 cr",      enterprise: "3 cr" },
+  { feature: "Emotion Graphs",      free: false,   basic: true,         pro: true,        enterprise: true },
+  { feature: "Character Analysis",  free: false,   basic: true,         pro: true,        enterprise: true },
+  { feature: "Finance Studio",      free: false,   basic: "1 trial",    pro: true,        enterprise: true },
+  { feature: "Projection Engine",   free: false,   basic: false,        pro: true,        enterprise: true },
+  { feature: "ROI / NPV / IRR",     free: false,   basic: false,        pro: true,        enterprise: true },
+  { feature: "PDF Export",          free: false,   basic: false,        pro: true,        enterprise: true },
+  { feature: "API Access",          free: false,   basic: false,        pro: false,       enterprise: true },
+  { feature: "Team Accounts",       free: false,   basic: false,        pro: false,       enterprise: "Soon" },
 ];
 
 function FeatureCell({ value }: { value: string | boolean }) {
@@ -467,28 +469,13 @@ export default function PricingPage() {
                 </ul>
 
                 {/* CTA Button */}
-                <Link href={plan.ctaHref}>
-                  <button
-                    className={cn(
-                      "w-full py-3 rounded-xl text-sm font-bold transition-all duration-200 hover:opacity-90 active:scale-[0.98]",
-                      plan.highlighted ? "text-white" : ""
-                    )}
-                    style={
-                      plan.highlighted
-                        ? {
-                            background: `linear-gradient(135deg, ${plan.accentColor}, #a78bfa)`,
-                            boxShadow: `0 0 24px ${plan.glowColor}`,
-                          }
-                        : {
-                            border: `1px solid ${plan.accentColor}40`,
-                            color: plan.accentColor,
-                            background: `${plan.accentColor}0A`,
-                          }
-                    }
-                  >
-                    {plan.cta}
-                  </button>
-                </Link>
+                <PlanCTAButton
+                  plan={plan.id as "free" | "basic" | "pro" | "enterprise"}
+                  label={plan.cta}
+                  featured={plan.highlighted}
+                  accent={plan.accentColor}
+                  glow={plan.glowColor}
+                />
               </motion.div>
             );
           })}
@@ -549,10 +536,10 @@ export default function PricingPage() {
                     Feature
                   </th>
                   {[
-                    { name: "Free", price: "₹0", color: "#6B7280" },
-                    { name: "Basic", price: "₹499", color: "#0EA5E9" },
-                    { name: "Pro", price: "₹1299", color: "#7C3AED" },
-                    { name: "Enterprise", price: "Custom", color: "#F59E0B" },
+                    { name: "Free",       price: "₹0 · 20 cr",      color: "#6B7280" },
+                    { name: "Basic",      price: "₹499 · 250 cr",   color: "#0EA5E9" },
+                    { name: "Pro",        price: "₹1,299 · 700 cr", color: "#7C3AED" },
+                    { name: "Enterprise", price: "Custom",           color: "#F59E0B" },
                   ].map((p) => (
                     <th key={p.name} className="text-center px-3 py-3" style={{ color: p.color }}>
                       <div className="font-black text-sm">{p.name}</div>

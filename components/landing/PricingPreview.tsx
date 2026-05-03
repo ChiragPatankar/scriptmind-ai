@@ -4,6 +4,7 @@ import React from "react";
 import { motion } from "framer-motion";
 import { Check, Lock, ArrowRight, Brain, BarChart3, Zap, Star, Building2, Tag } from "lucide-react";
 import Link from "next/link";
+import PlanCTAButton from "@/components/PlanCTAButton";
 
 const tiers = [
   {
@@ -273,26 +274,13 @@ export default function PricingPreview() {
                 </ul>
 
                 {/* CTA */}
-                <Link href={tier.ctaHref}>
-                  <button
-                    className="w-full py-2.5 rounded-xl text-sm font-bold transition-all duration-200 hover:opacity-90 active:scale-[0.98]"
-                    style={
-                      tier.featured
-                        ? {
-                            background: `linear-gradient(135deg, ${tier.accent}, #a78bfa)`,
-                            color: "#fff",
-                            boxShadow: `0 0 20px ${tier.glow}`,
-                          }
-                        : {
-                            border: `1px solid ${tier.accent}35`,
-                            color: tier.accent,
-                            background: `${tier.accent}08`,
-                          }
-                    }
-                  >
-                    {tier.cta}
-                  </button>
-                </Link>
+                <PlanCTAButton
+                  plan={tier.name.toLowerCase() as "free" | "basic" | "pro" | "enterprise"}
+                  label={tier.cta}
+                  featured={tier.featured}
+                  accent={tier.accent}
+                  glow={tier.glow}
+                />
               </motion.div>
             );
           })}

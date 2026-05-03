@@ -12,17 +12,17 @@ import { createClient } from "@/lib/supabase-browser";
 
 export interface FinanceAccessState {
   isLoading:    boolean;
-  canGenerate:  boolean;   // true for pro or unused trial
-  isLocked:     boolean;   // basic + trial already used
-  isPro:        boolean;
-  isTrial:      boolean;   // basic + trial not yet used
+  canGenerate:  boolean;   // true for paid (basic/pro) or free trial not yet used
+  isLocked:     boolean;   // free + trial already used
+  isPaid:       boolean;   // basic or pro (credit-based, unlimited)
+  isTrial:      boolean;   // free + trial not yet used
   /** Refetch after a successful generation to update state. */
   refresh:      () => void;
 }
 
 export function useFinanceAccess(): FinanceAccessState {
   const [isLoading,  setIsLoading]  = useState(true);
-  const [isPro,      setIsPro]      = useState(false);
+  const [isPaid,     setIsPaid]     = useState(false);
   const [isTrial,    setIsTrial]    = useState(false);
   const [isLocked,   setIsLocked]   = useState(false);
   const [tick,       setTick]       = useState(0);
@@ -51,9 +51,9 @@ export function useFinanceAccess(): FinanceAccessState {
       if (cancelled) return;
 
       if (!data) {
-        // Row missing — treat as free
-        setIsPro(false);
-        setIsTrial(false);
+        // Row missing — give free trial benefit of the doubt
+        setIsPaid(false);
+        setIsTrial(true);
         setIsLocked(false);
         setIsLoading(false);
         return;
@@ -64,12 +64,12 @@ export function useFinanceAccess(): FinanceAccessState {
         finance_trial_used: boolean;
       };
 
-      const pro   = plan === "pro";
-      const basic = plan === "basic";
+      const paid = plan === "basic" || plan === "pro";
 
-      setIsPro(pro);
-      setIsTrial(basic && !finance_trial_used);
-      setIsLocked(basic && finance_trial_used);
+      setIsPaid(paid);
+      // Free: 1 trial. Basic/Pro: unlimited (credit-based), no trial state needed
+      setIsTrial(!paid && !finance_trial_used);
+      setIsLocked(!paid && !!finance_trial_used);
       setIsLoading(false);
     })();
 
@@ -77,7 +77,7 @@ export function useFinanceAccess(): FinanceAccessState {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tick]);
 
-  const canGenerate = isPro || isTrial;
+  const canGenerate = isPaid || isTrial;
 
-  return { isLoading, canGenerate, isLocked, isPro, isTrial, refresh };
+  return { isLoading, canGenerate, isLocked, isPaid, isTrial, refresh };
 }

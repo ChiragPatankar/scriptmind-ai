@@ -2,7 +2,8 @@
 
 import React from "react";
 import Link from "next/link";
-import { Sparkles, X, Code2, Globe, PlaySquare } from "lucide-react";
+import Image from "next/image";
+import { X, Code2, Globe, PlaySquare } from "lucide-react";
 
 const footerColumns = [
   {
@@ -76,11 +77,8 @@ export default function Footer() {
           {/* Brand Column */}
           <div className="col-span-2 md:col-span-3 lg:col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4 group w-fit">
-              <div className="relative">
-                <div className="w-8 h-8 rounded-lg bg-gradient-accent flex items-center justify-center">
-                  <Sparkles className="w-4 h-4 text-white" />
-                </div>
-                <div className="absolute inset-0 w-8 h-8 rounded-lg bg-gradient-accent blur-md opacity-30 group-hover:opacity-60 transition-opacity" />
+              <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
+                <Image src="/logo.png" alt="ScriptMind AI" width={32} height={32} className="w-full h-full object-contain" />
               </div>
               <span className="text-base font-bold text-text-primary">
                 ScriptMind <span className="text-gradient">AI</span>

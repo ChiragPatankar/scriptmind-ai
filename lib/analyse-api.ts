@@ -171,11 +171,11 @@ export function mapApiResponseToReport(
 }
 
 async function postFile(file: File): Promise<AnalyseScriptReport> {
-  const base = getAnalyseApiBaseUrl().replace(/\/$/, "");
   const form = new FormData();
   form.append("file", file, file.name);
 
-  const res = await fetch(`${base}/api/v1/scripts/analyse`, { method: "POST", body: form });
+  // Route through /api/analyse so credits are deducted server-side
+  const res = await fetch("/api/analyse", { method: "POST", body: form });
 
   const payload = (await res.json().catch(() => ({}))) as { detail?: string | { msg?: string }[] };
 

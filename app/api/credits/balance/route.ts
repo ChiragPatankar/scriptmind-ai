@@ -37,13 +37,17 @@ export async function GET(request: NextRequest) {
 
   const { data: existing } = await admin
     .from("users")
-    .select("credits, plan")
+    .select("credits, plan, plan_expires_at")
     .eq("id", user.id)
     .maybeSingle();
 
   if (existing) {
     return applyCookies(
-      NextResponse.json({ credits: existing.credits, plan: existing.plan })
+      NextResponse.json({
+        credits:         existing.credits,
+        plan:            existing.plan,
+        plan_expires_at: existing.plan_expires_at ?? null,
+      })
     );
   }
 
@@ -55,7 +59,7 @@ export async function GET(request: NextRequest) {
       credits: 20,
       plan:    "free",
     })
-    .select("credits, plan")
+    .select("credits, plan, plan_expires_at")
     .single();
 
   if (insertErr || !inserted) {
@@ -71,6 +75,10 @@ export async function GET(request: NextRequest) {
   }
 
   return applyCookies(
-    NextResponse.json({ credits: inserted.credits, plan: inserted.plan })
+    NextResponse.json({
+      credits:         inserted.credits,
+      plan:            inserted.plan,
+      plan_expires_at: inserted.plan_expires_at ?? null,
+    })
   );
 }

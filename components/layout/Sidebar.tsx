@@ -7,7 +7,7 @@ import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FolderOpen,
-  Download,
+  Activity,
   Settings,
   ChevronLeft,
   ChevronRight,
@@ -39,7 +39,7 @@ const navItems = [
       { label: "Create Story",     href: "/create-story",      icon: PenTool      },
       { label: "Visualize Scene",  href: "/visualize",         icon: Camera       },
       { label: "Finance Studio",   href: "/financial",         icon: IndianRupee  },
-      { label: "Download Scripts", href: "/download-scripts",  icon: Download     },
+      { label: "Usage Dashboard",   href: "/download-scripts",  icon: Activity     },
     ],
   },
   {

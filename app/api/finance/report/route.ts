@@ -10,6 +10,7 @@ import { NextRequest, NextResponse }            from "next/server";
 import { createRouteSupabase }                   from "@/lib/supabase-route";
 import { checkFinanceAccess }                    from "@/lib/finance/checkAccess";
 import { commitTrial }                           from "@/lib/finance/commitTrial";
+import { deductCredits }                         from "@/lib/credits/deduct";
 import {
   computeMetrics,
   type BudgetMatrix,
@@ -92,17 +93,29 @@ export async function POST(request: NextRequest) {
   // 2. Access check
   const access = await checkFinanceAccess(user.id);
   if (!access.allowed) {
-    const message =
-      access.code === "FINANCE_LOCKED"
-        ? "You have already used your free Finance Studio report. Upgrade to Pro for unlimited access."
-        : "Finance Studio requires a Basic or Pro plan. Upgrade to continue.";
-
     return applyCookies(
-      NextResponse.json({ error: access.code, message }, { status: 403 })
+      NextResponse.json({
+        error:   access.code,
+        message: "You have used your 1 free Finance Studio report. Upgrade to Basic or Pro to continue (5 credits per report).",
+      }, { status: 403 })
     );
   }
 
-  // 3. Parse and validate body
+  // 3a. For paid tier (basic / pro) — deduct 5 credits before generation
+  if (access.tier === "paid") {
+    const deduct = await deductCredits(user.id, "finance_report");
+    if (!deduct.success) {
+      return applyCookies(
+        NextResponse.json({
+          error:     deduct.code,
+          message:   deduct.message,
+          remaining: 0,
+        }, { status: deduct.code === "INSUFFICIENT_CREDITS" ? 402 : 500 })
+      );
+    }
+  }
+
+  // 3b. Parse and validate body
   let body: ReportRequest;
   try {
     body = (await request.json()) as ReportRequest;
@@ -174,7 +187,7 @@ export async function POST(request: NextRequest) {
     detailed_projections: detailedProjections,
   };
 
-  // 6. Strip locked fields for trial users (server-side — never trust frontend)
+  // 6. Strip advanced fields for trial users (server-side — never trust frontend)
   const tier = access.tier;
   const report: FullReport =
     tier === "trial"
@@ -186,7 +199,7 @@ export async function POST(request: NextRequest) {
         }
       : fullReport;
 
-  // 7. Commit trial usage ONLY after successful generation
+  // 7. Commit trial usage ONLY after successful generation (free plan only)
   if (tier === "trial") {
     await commitTrial(user.id);
   }
