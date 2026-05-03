@@ -9,7 +9,9 @@ import type { Feature } from "./costs";
 export const DAILY_LIMITS: Record<Feature, number | null> = {
   script_analysis:     10,
   story_generation:    null,
+  script_expand:       null,
   dialogue:            null,
   image_generation:    null,
   projection_insights: null,
+  finance_report:      null,
 };
