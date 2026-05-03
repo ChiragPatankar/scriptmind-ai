@@ -73,7 +73,7 @@ export interface FinanceReportResponse {
     investor_analysis:     FullReport["investor_analysis"];
     detailed_projections:  FullReport["detailed_projections"];
   };
-  tier:            "pro" | "trial";
+  tier:            "paid" | "trial";
   remainingTrial:  0 | null;
 }
 

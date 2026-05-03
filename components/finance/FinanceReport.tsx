@@ -16,7 +16,7 @@ type Report = FinanceReportResponse["report"];
 
 interface FinanceReportProps {
   report: Report;
-  tier:   "pro" | "trial";
+  tier:   "paid" | "trial";
 }
 
 // ── Formatters ────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ function ExportPDFButton() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function FinanceReport({ report, tier }: FinanceReportProps) {
-  const isLocked = tier !== "pro";
+  const isLocked = tier !== "paid";
   const roiPositive = report.roi_percent >= 0;
 
   return (
