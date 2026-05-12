@@ -421,29 +421,6 @@ export default function HeroSection({ movies = [] }: HeroSectionProps) {
               </a>
             </motion.div>
 
-            {/* Stats */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.8, duration: 0.7 }}
-              className="flex flex-wrap gap-6"
-              style={{ paddingTop: "1.5rem", borderTop: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              {[
-                { value: "50K+",    label: "Filmmakers" },
-                { value: "10K+",    label: "Scripts Written" },
-                { value: "₹120Cr+", label: "Budgets Planned" },
-                { value: "99.9%",   label: "Uptime" },
-              ].map((s) => (
-                <div key={s.label}>
-                  <div className="text-xl font-black" style={{
-                    background: `linear-gradient(135deg, ${BLUE}, #5BA8E5, ${CYAN})`,
-                    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
-                  }}>{s.value}</div>
-                  <div className="text-xs mt-0.5" style={{ color: "rgba(248,248,255,0.35)" }}>{s.label}</div>
-                </div>
-              ))}
-            </motion.div>
           </motion.div>
 
           {/* RIGHT — 2-column card panel: Script left | Financial+Dialogue stacked right */}

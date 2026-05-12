@@ -128,7 +128,7 @@ export default function FeatureCards() {
             </span>
           </h2>
           <p className="text-base text-text-muted max-w-xl mx-auto leading-relaxed">
-            Six powerful tools, one seamless platform — built for filmmakers at every stage of their journey.
+            Six powerful tools, one seamless platform. Built for filmmakers at every stage of their journey.
           </p>
         </motion.div>
 

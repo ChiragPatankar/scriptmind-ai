@@ -10,6 +10,8 @@ export const CLIENT_FEATURE_COSTS: Record<string, number> = {
   image_generation:    3,
   projection_insights: 1,
   finance_report:      5,
+  poster_generate:     10,
+  poster_regenerate:   5,
 };
 
 export const CLIENT_FEATURE_LABELS: Record<string, string> = {
@@ -20,4 +22,6 @@ export const CLIENT_FEATURE_LABELS: Record<string, string> = {
   image_generation:    "Scene Visualizer",
   projection_insights: "AI Insights",
   finance_report:      "Finance Studio Report",
+  poster_generate:     "Poster Generator",
+  poster_regenerate:   "Poster Regeneration",
 };

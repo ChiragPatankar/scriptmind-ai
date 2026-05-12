@@ -108,14 +108,78 @@ async function callGemini(
   const text       = candidate?.content?.parts?.[0]?.text ?? "";
   const finishReason = candidate?.finishReason ?? "";
 
-  // Try direct parse first, then always attempt repair before giving up
+  // Try direct parse first, then sanitize + repair before giving up
   try {
     return JSON.parse(text);
   } catch {
-    const recovered = repairTruncatedJson(text);
-    if (recovered !== null) return recovered;
-    throw new Error(`Gemini returned invalid JSON (finishReason: ${finishReason}). Raw: ${text.slice(0, 300)}`);
+    // Sanitize curly/smart quotes and unescaped straight quotes inside string values
+    const sanitized = sanitizeGeminiJson(text);
+    try {
+      return JSON.parse(sanitized);
+    } catch {
+      const recovered = repairTruncatedJson(sanitized);
+      if (recovered !== null) return recovered;
+      throw new Error(`Gemini returned invalid JSON (finishReason: ${finishReason}). Raw: ${text.slice(0, 300)}`);
+    }
   }
+}
+
+/**
+ * Sanitizes common Gemini JSON quirks before parsing:
+ * 1. Replaces curly/smart quote characters with straight ASCII quotes
+ * 2. Escapes unescaped straight double-quotes that appear inside JSON string values
+ */
+function sanitizeGeminiJson(raw: string): string {
+  // Replace Unicode curly/fancy quotes with ASCII equivalents
+  const text = raw
+    .replace(/[\u201C\u201D\u201E\u201F\u2033\u2036]/g, '"') // curly double quotes → "
+    .replace(/[\u2018\u2019\u201A\u201B\u2032\u2035]/g, "'"); // curly single quotes → '
+
+  // Fix unescaped double-quotes inside JSON string values.
+  // Strategy: scan char-by-char tracking whether we're inside a JSON string,
+  // and if we find a `"` that isn't opening/closing the string, escape it.
+  const out: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (escaped) {
+      out.push(ch);
+      escaped = false;
+      continue;
+    }
+    if (ch === "\\") {
+      out.push(ch);
+      escaped = true;
+      continue;
+    }
+    if (ch === '"') {
+      if (!inString) {
+        // Opening quote of a JSON string (or structural quote)
+        inString = true;
+        out.push(ch);
+      } else {
+        // Could be closing quote OR an unescaped " inside the string.
+        // Peek ahead: if next non-space char is one of ,:}] then it's a closing quote.
+        let j = i + 1;
+        while (j < text.length && (text[j] === " " || text[j] === "\t" || text[j] === "\n" || text[j] === "\r")) j++;
+        const next = text[j];
+        if (next === "," || next === ":" || next === "}" || next === "]" || j >= text.length) {
+          // Closing quote
+          inString = false;
+          out.push(ch);
+        } else {
+          // Unescaped quote inside a string value — escape it
+          out.push('\\"');
+        }
+      }
+      continue;
+    }
+    out.push(ch);
+  }
+
+  return out.join("");
 }
 
 /**
@@ -178,6 +242,7 @@ Generate a concise story outline based on the details below:
 - Setting: ${input.setting}
 
 IMPORTANT — keep all strings SHORT and CONCISE (max 25 words per scene, max 40 words per arc).
+CRITICAL — never use double-quote characters (") inside any string value. Use single quotes (') if quoting is needed within text.
 
 Return ONLY valid JSON (no markdown fences, no extra text) matching this EXACT schema — include all closing brackets:
 {"title":"string","logline":"one sentence max 40 words","acts":[{"label":"Act I — Setup","scenes":["scene 1","scene 2","scene 3"]},{"label":"Act II — Confrontation","scenes":["scene 1","scene 2","scene 3"]},{"label":"Act III — Resolution","scenes":["scene 1","scene 2","scene 3"]}],"characters":[{"name":"Name","role":"Protagonist","arc":"brief arc"},{"name":"Name","role":"Antagonist","arc":"brief arc"},{"name":"Name","role":"Supporting","arc":"brief arc"}]}`;

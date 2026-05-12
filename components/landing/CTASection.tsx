@@ -9,8 +9,8 @@ import { Button } from "@/components/ui/button";
 const benefits = [
   "Free forever plan available",
   "No credit card required",
-  "Access 10,000+ scripts instantly",
   "AI dialogue & story tools",
+  "Finance Studio built-in",
 ];
 
 export default function CTASection() {
@@ -44,7 +44,7 @@ export default function CTASection() {
           </h2>
 
           <p className="text-lg text-text-secondary max-w-xl mx-auto mb-10 leading-relaxed">
-            Join 50,000+ filmmakers who use ScriptMind AI to write scripts, plan budgets, and take their film from idea to box office.
+            ScriptMind AI gives filmmakers, writers, and producers the tools to develop scripts, plan budgets, and take their film from idea to box office.
           </p>
 
           {/* Benefits */}
@@ -77,19 +77,6 @@ export default function CTASection() {
             </Link>
           </div>
 
-          {/* Social proof */}
-          <motion.p
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
-            viewport={{ once: true }}
-            transition={{ delay: 0.4, duration: 0.6 }}
-            className="mt-8 text-xs text-text-muted"
-          >
-            ★★★★★{" "}
-            <span className="text-text-secondary font-medium">4.9/5</span>
-            {" "}from over{" "}
-            <span className="text-text-secondary font-medium">2,400 reviews</span>
-          </motion.p>
         </motion.div>
       </div>
     </section>

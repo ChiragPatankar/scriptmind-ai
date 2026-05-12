@@ -21,8 +21,16 @@ const tiers = [
     glow: "rgba(107,114,128,0.1)",
     border: "rgba(107,114,128,0.22)",
     bg: "rgba(107,114,128,0.04)",
-    aiLine: "2 · 1 · 3 / month",
-    features: ["Basic script insights", "Project management"],
+    aiLimits: [
+      { label: "Credits", value: "20 credits" },
+      { label: "Script Analysis", value: "2 cr each" },
+      { label: "AI Dialogue", value: "1 cr each" },
+    ],
+    features: [
+      "Basic script insights",
+      "Hindi / English / Hinglish",
+      "Project management",
+    ],
     locked: "Finance Studio",
     featured: false,
     cta: "Start for Free",
@@ -42,9 +50,18 @@ const tiers = [
     glow: "rgba(14,165,233,0.1)",
     border: "rgba(14,165,233,0.28)",
     bg: "rgba(14,165,233,0.04)",
-    aiLine: "15 · 10 · 30 / month",
-    features: ["Full insights + Emotion graphs", "Character analysis"],
-    locked: "Finance Studio",
+    aiLimits: [
+      { label: "Credits", value: "250 credits / mo" },
+      { label: "Script Analysis", value: "2 cr each" },
+      { label: "Finance Studio", value: "1 free trial" },
+    ],
+    features: [
+      "Full script insights + Emotion graphs",
+      "Character analysis",
+      "All languages + Urdu",
+      "Finance Studio (1 free trial)",
+    ],
+    locked: null,
     featured: false,
     cta: "Start Basic Plan",
     ctaHref: "/signup",
@@ -63,11 +80,17 @@ const tiers = [
     glow: "rgba(124,58,237,0.22)",
     border: "rgba(124,58,237,0.5)",
     bg: "linear-gradient(145deg, rgba(124,58,237,0.14), rgba(124,58,237,0.05))",
-    aiLine: "50 · 40 · 100 / month",
+    aiLimits: [
+      { label: "Credits", value: "700 credits / mo" },
+      { label: "Finance Studio", value: "Full access" },
+      { label: "Visualize Scene", value: "3 cr each" },
+    ],
     features: [
       "Everything in Basic",
       "Finance Studio — Full Access",
+      "Projection Engine",
       "ROI / NPV / IRR + PDF Export",
+      "Priority AI processing",
     ],
     locked: null,
     featured: true,
@@ -88,8 +111,18 @@ const tiers = [
     glow: "rgba(245,158,11,0.1)",
     border: "rgba(245,158,11,0.28)",
     bg: "rgba(245,158,11,0.04)",
-    aiLine: "High + Fair Use",
-    features: ["Finance Studio — Full Access", "API access", "Priority processing"],
+    aiLimits: [
+      { label: "Script Analysis", value: "High + Fair Use" },
+      { label: "Create Story", value: "High + Fair Use" },
+      { label: "AI Dialogue", value: "High + Fair Use" },
+    ],
+    features: [
+      "Everything in Pro",
+      "API access",
+      "Priority processing",
+      "Custom workflows",
+      "Dedicated account manager",
+    ],
     locked: null,
     featured: false,
     cta: "Contact Sales",
@@ -247,14 +280,20 @@ export default function PricingPreview() {
                   className="rounded-xl px-3.5 py-2.5 mb-4"
                   style={{ background: `${tier.accent}0A`, border: `1px solid ${tier.accent}1A` }}
                 >
-                  <div className="flex items-center gap-1.5 mb-1">
+                  <div className="flex items-center gap-1.5 mb-2">
                     <Brain className="w-3 h-3" style={{ color: tier.accent }} />
                     <span className="text-[9px] font-black uppercase tracking-widest" style={{ color: tier.accent }}>
-                      AI Limits
+                      AI Usage
                     </span>
                   </div>
-                  <p className="text-xs font-semibold text-text-secondary">{tier.aiLine}</p>
-                  <p className="text-[10px] text-text-muted mt-0.5">Analyse · Story · Dialogue</p>
+                  <div className="space-y-1.5">
+                    {tier.aiLimits.map((limit) => (
+                      <div key={limit.label} className="flex items-center justify-between">
+                        <span className="text-[11px] text-text-muted">{limit.label}</span>
+                        <span className="text-[11px] font-bold text-text-secondary">{limit.value}</span>
+                      </div>
+                    ))}
+                  </div>
                 </div>
 
                 {/* Features */}

@@ -15,6 +15,7 @@ import Link from "next/link";
 import { Loader2, Zap, Lock, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useFinanceAccess } from "@/hooks/useFinanceAccess";
+import { useFinancialStore } from "@/lib/financial-store";
 import FinanceReport from "./FinanceReport";
 import type { FinanceReportResponse } from "@/app/api/finance/report/route";
 
@@ -30,6 +31,7 @@ interface GenerateButtonProps {
 
 export default function GenerateButton({ payload, className }: GenerateButtonProps) {
   const { isLoading, isPaid, isTrial, isLocked, refresh } = useFinanceAccess();
+  const setReportGenerated = useFinancialStore((s) => s.setReportGenerated);
   const [generating, setGenerating]   = useState(false);
   const [result,     setResult]       = useState<FinanceReportResponse | null>(null);
   const [errorMsg,   setErrorMsg]     = useState<string | null>(null);
@@ -62,6 +64,8 @@ export default function GenerateButton({ payload, className }: GenerateButtonPro
 
       const data = await res.json() as FinanceReportResponse;
       setResult(data);
+      // Reveal the full client-side report dashboard below inputs
+      setReportGenerated(true);
       // After a successful trial use, refresh access state so button locks
       if (data.tier === "trial") refresh();
 
