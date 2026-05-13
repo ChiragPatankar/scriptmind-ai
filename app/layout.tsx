@@ -1,8 +1,9 @@
-import type { Metadata } from "next";
-import "./globals.css";
+import { MotionProvider } from "@/components/providers/MotionProvider";
 import QueryProvider from "@/components/providers/QueryProvider";
 import { ThemeProvider } from "@/components/providers/ThemeProvider";
-import { MotionProvider } from "@/components/providers/MotionProvider";
+import SupportChatWidget from "@/components/support/SupportChatWidget";
+import type { Metadata } from "next";
+import "./globals.css";
 
 export const metadata: Metadata = {
   title: {
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
     template: "%s | ScriptMind AI",
   },
   description:
-    "The ultimate AI-powered platform for Bollywood scripts, stories, dialogues, and analysis. Trusted by 50,000+ storytellers.",
+    "The ultimate AI-powered platform for movie scripts, stories, dialogues, and analysis. Trusted by 50,000+ storytellers.",
   keywords: [
     "Bollywood scripts",
     "AI screenplay",
@@ -27,17 +28,20 @@ export const metadata: Metadata = {
     url: "https://scriptmind.ai",
     title: "ScriptMind AI — Bollywood Script Hub",
     description:
-      "Stream, analyse, and create Bollywood scripts powered by AI.",
+      "Stream, analyse, and create movie scripts powered by AI.",
     siteName: "ScriptMind AI",
   },
   twitter: {
     card: "summary_large_image",
     title: "ScriptMind AI",
-    description: "Bollywood scripts, stories & AI dialogues — all in one platform.",
+    description: "Movie scripts, stories & AI dialogues — all in one platform.",
     creator: "@ScriptMindAI",
   },
   icons: {
-    icon: "/favicon.ico",
+    /* `public/favicon.ico` was never shipped — use the real brand mark. */
+    icon: [{ url: "/logo.png", type: "image/png" }],
+    apple: [{ url: "/logo.png", type: "image/png" }],
+    shortcut: "/logo.png",
   },
 };
 
@@ -80,7 +84,10 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
           <MotionProvider>
-            <QueryProvider>{children}</QueryProvider>
+            <QueryProvider>
+              {children}
+              <SupportChatWidget />
+            </QueryProvider>
           </MotionProvider>
         </ThemeProvider>
       </body>
