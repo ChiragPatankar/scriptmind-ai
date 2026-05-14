@@ -1,17 +1,31 @@
 "use client";
 
-import React, { useCallback, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Upload, Brain, Zap, CheckCircle2, AlertCircle, FileText,
-  PenLine, ChevronRight, Loader2, BarChart3, Users, Heart,
-  Shield, TrendingUp, Sparkles,
-} from "lucide-react";
+import { AnalyseDashboardSkeleton, AnalyseScriptDashboard } from "@/components/analyse";
 import { Button } from "@/components/ui/button";
 import { CreditBadge } from "@/components/ui/CreditBadge";
-import { AnalyseScriptDashboard, AnalyseDashboardSkeleton } from "@/components/analyse";
-import type { AnalyseScriptReport } from "@/lib/mock/analyse-script";
+import { SaveButton } from "@/components/ui/SaveButton";
 import { analyseScriptFile, analyseScriptText } from "@/lib/analyse-api";
+import { useFeatureDraft } from "@/lib/draft/useFeatureDraft";
+import type { AnalyseScriptReport } from "@/lib/mock/analyse-script";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    AlertCircle,
+    BarChart3,
+    Brain,
+    CheckCircle2,
+    ChevronRight,
+    FileText,
+    Heart,
+    Loader2,
+    PenLine,
+    Shield,
+    Sparkles,
+    TrendingUp,
+    Upload,
+    Users,
+    Zap,
+} from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 type Phase = "upload" | "loading" | "report";
 type InputMode = "file" | "text";
@@ -39,6 +53,27 @@ export default function AnalysePage() {
   const [dragOver,   setDragOver]   = useState(false);
   const [pastedText, setPastedText] = useState("");
   const [scriptTitle, setScriptTitle] = useState("");
+
+  // ── Draft persistence ────────────────────────────────────────────────────
+  // Saved fields: input mode, pasted text, script title, and the last report so
+  // users can reopen a previous analysis without burning credits again.
+  const draftSnapshot = { inputMode, pastedText, scriptTitle, report };
+  const {
+    loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
+  } = useFeatureDraft("analyse", draftSnapshot);
+
+  useEffect(() => {
+    if (!loadedDraft) return;
+    if (loadedDraft.inputMode === "file" || loadedDraft.inputMode === "text")
+      setInputMode(loadedDraft.inputMode);
+    if (typeof loadedDraft.pastedText  === "string") setPastedText(loadedDraft.pastedText);
+    if (typeof loadedDraft.scriptTitle === "string") setScriptTitle(loadedDraft.scriptTitle);
+    if (loadedDraft.report) {
+      setReport(loadedDraft.report);
+      setPhase("report");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedDraft]);
 
   const runAnalysis = useCallback(
     async (loader: () => Promise<AnalyseScriptReport>) => {
@@ -114,18 +149,26 @@ export default function AnalysePage() {
           >
             {/* ── Page Header ── */}
             <div className="mb-7">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center"
-                  style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)" }}>
-                  <Brain className="w-5 h-5 text-accent" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <h1 className="text-2xl font-black text-text-primary leading-tight">Analyse Script</h1>
-                    <CreditBadge cost={2} label="credits per analysis" />
+              <div className="flex items-center justify-between gap-3 flex-wrap mb-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center"
+                    style={{ background: "rgba(99,102,241,0.15)", border: "1px solid rgba(99,102,241,0.3)" }}>
+                    <Brain className="w-5 h-5 text-accent" />
                   </div>
-                  <p className="text-xs text-text-muted">AI-powered screenplay intelligence — emotion, character, and structure</p>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-2xl font-black text-text-primary leading-tight">Analyse Script</h1>
+                      <CreditBadge cost={2} label="credits per analysis" />
+                    </div>
+                    <p className="text-xs text-text-muted">AI-powered screenplay intelligence — emotion, character, and structure</p>
+                  </div>
                 </div>
+                <SaveButton
+                  status={saveStatus}
+                  isDirty={isDirty && isHydrated}
+                  lastSavedAt={lastSavedAt}
+                  onClick={save}
+                />
               </div>
               <div className="flex flex-wrap gap-2 mt-4">
                 {[

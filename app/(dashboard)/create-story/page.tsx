@@ -1,19 +1,37 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  PenTool, Sparkles, Film, Users, MapPin, Wand2,
-  ChevronRight, CheckCircle2, AlertCircle, RefreshCw,
-  Target, Clock, Download, Copy, BookOpen, Layers,
-  FileText, X, Zap, ChevronDown, ChevronUp,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CreditBadge } from "@/components/ui/CreditBadge";
+import { Input } from "@/components/ui/input";
+import { SaveButton } from "@/components/ui/SaveButton";
+import { useFeatureDraft } from "@/lib/draft/useFeatureDraft";
+import type { FullScript, StoryOutline } from "@/lib/gemini-api";
 import { cn } from "@/lib/utils";
-import type { StoryOutline, FullScript } from "@/lib/gemini-api";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    AlertCircle,
+    BookOpen,
+    CheckCircle2,
+    ChevronDown,
+    ChevronRight,
+    ChevronUp,
+    Clock,
+    Copy,
+    Download,
+    FileText,
+    Film,
+    Layers,
+    MapPin,
+    PenTool,
+    RefreshCw,
+    Sparkles,
+    Target,
+    Users,
+    Wand2,
+    X, Zap,
+} from "lucide-react";
+import React, { useEffect, useState } from "react";
 
 // ── Data ──────────────────────────────────────────────────────────────────────
 
@@ -167,6 +185,31 @@ export default function CreateStoryPage() {
   const [fullScript,    setFullScript]    = useState<FullScript | null>(null);
   const [expandError,   setExpandError]   = useState<string | null>(null);
   const [scriptModal,   setScriptModal]   = useState(false);
+
+  // ── Draft persistence ────────────────────────────────────────────────────
+  const draftSnapshot = {
+    title, premise, genre, tone, setting, audience, theme, runtime,
+    storyOutline, fullScript,
+  };
+  const {
+    loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
+  } = useFeatureDraft("create-story", draftSnapshot);
+
+  useEffect(() => {
+    if (!loadedDraft) return;
+    if (typeof loadedDraft.title    === "string") setTitle(loadedDraft.title);
+    if (typeof loadedDraft.premise  === "string") setPremise(loadedDraft.premise);
+    if (typeof loadedDraft.genre    === "string") setGenre(loadedDraft.genre);
+    if (typeof loadedDraft.tone     === "string") setTone(loadedDraft.tone);
+    if (typeof loadedDraft.setting  === "string") setSetting(loadedDraft.setting);
+    if (typeof loadedDraft.audience === "string") setAudience(loadedDraft.audience);
+    if (typeof loadedDraft.theme    === "string") setTheme(loadedDraft.theme);
+    if (loadedDraft.runtime === "short" || loadedDraft.runtime === "feature" || loadedDraft.runtime === "series")
+      setRuntime(loadedDraft.runtime);
+    if (loadedDraft.storyOutline)   setStoryOutline(loadedDraft.storyOutline);
+    if (loadedDraft.fullScript)     setFullScript(loadedDraft.fullScript);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedDraft]);
 
   const generate = async () => {
     setIsGenerating(true);
@@ -380,9 +423,17 @@ export default function CreateStoryPage() {
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-3xl font-black text-text-primary">Create Story</h1>
-          <CreditBadge cost={2} label="credits per story" />
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-text-primary">Create Story</h1>
+            <CreditBadge cost={2} label="credits per story" />
+          </div>
+          <SaveButton
+            status={saveStatus}
+            isDirty={isDirty && isHydrated}
+            lastSavedAt={lastSavedAt}
+            onClick={save}
+          />
         </div>
         <p className="text-text-muted text-sm">Transform your idea into a complete, structured screenplay outline with AI.</p>
       </motion.div>

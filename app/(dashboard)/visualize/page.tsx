@@ -1,20 +1,22 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Camera,
-  Sparkles,
-  Download,
-  RefreshCw,
-  AlertCircle,
-  ImageIcon,
-  Film,
-  Palette,
-} from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { CreditBadge } from "@/components/ui/CreditBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { CreditBadge } from "@/components/ui/CreditBadge";
+import { SaveButton } from "@/components/ui/SaveButton";
+import { useFeatureDraft } from "@/lib/draft/useFeatureDraft";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    AlertCircle,
+    Camera,
+    Download,
+    Film,
+    ImageIcon,
+    Palette,
+    RefreshCw,
+    Sparkles,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 const styleOptions = [
   { value: "cinematic", label: "Cinematic", desc: "35mm film look" },
@@ -59,6 +61,24 @@ export default function VisualizePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // ── Draft persistence ────────────────────────────────────────────────────
+  const draftSnapshot = { scene, style, mood, imageUrl };
+  const {
+    loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
+  } = useFeatureDraft("visualize", draftSnapshot);
+
+  useEffect(() => {
+    if (!loadedDraft) return;
+    if (typeof loadedDraft.scene === "string")    setScene(loadedDraft.scene);
+    if (typeof loadedDraft.style === "string")    setStyle(loadedDraft.style);
+    if (typeof loadedDraft.mood === "string")     setMood(loadedDraft.mood);
+    if (typeof loadedDraft.imageUrl === "string") {
+      setImageUrl(loadedDraft.imageUrl);
+      setImgLoaded(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedDraft]);
+
   const generate = async () => {
     if (!scene.trim()) return;
     setIsLoading(true);
@@ -100,14 +120,22 @@ export default function VisualizePage() {
         animate={{ opacity: 1, y: 0 }}
         className="mb-8"
       >
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20 flex items-center justify-center">
-            <Camera className="w-5 h-5 text-violet-400" />
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500/20 to-purple-500/10 border border-violet-500/20 flex items-center justify-center">
+              <Camera className="w-5 h-5 text-violet-400" />
+            </div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-black text-text-primary">Visualize Your Scene</h1>
+              <CreditBadge cost={3} label="credits per image" />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-3xl font-black text-text-primary">Visualize Your Scene</h1>
-            <CreditBadge cost={3} label="credits per image" />
-          </div>
+          <SaveButton
+            status={saveStatus}
+            isDirty={isDirty && isHydrated}
+            lastSavedAt={lastSavedAt}
+            onClick={save}
+          />
         </div>
         <p className="text-text-muted ml-[52px]">
           Generate cinematic images from your screenplay scenes using AI.

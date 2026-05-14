@@ -1,19 +1,21 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
-import Image from "next/image";
-import {
-  Film,
-  Sparkles,
-  RefreshCw,
-  Download,
-  Loader2,
-  ImageIcon,
-  Wand2,
-  Type,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
 import { CreditBadge } from "@/components/ui/CreditBadge";
+import { SaveButton } from "@/components/ui/SaveButton";
+import { useFeatureDraft } from "@/lib/draft/useFeatureDraft";
+import { cn } from "@/lib/utils";
+import {
+    Download,
+    Film,
+    ImageIcon,
+    Loader2,
+    RefreshCw,
+    Sparkles,
+    Type,
+    Wand2,
+} from "lucide-react";
+import Image from "next/image";
+import { useCallback, useEffect, useState } from "react";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
@@ -181,6 +183,29 @@ export default function PosterGeneratorPage() {
   const [displayTitle,   setDisplayTitle]   = useState("");
   const [displayTagline, setDisplayTagline] = useState("");
 
+  // ── Draft persistence ────────────────────────────────────────────────────
+  const draftSnapshot = {
+    title, tagline, genre, mood, style,
+    imageUrl, currentPrompt, displayTitle, displayTagline,
+  };
+  const {
+    loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
+  } = useFeatureDraft("poster", draftSnapshot);
+
+  useEffect(() => {
+    if (!loadedDraft) return;
+    if (typeof loadedDraft.title          === "string") setTitle(loadedDraft.title);
+    if (typeof loadedDraft.tagline        === "string") setTagline(loadedDraft.tagline);
+    if (typeof loadedDraft.genre          === "string") setGenre(loadedDraft.genre);
+    if (typeof loadedDraft.mood           === "string") setMood(loadedDraft.mood);
+    if (typeof loadedDraft.style          === "string") setStyle(loadedDraft.style);
+    if (typeof loadedDraft.imageUrl       === "string") setImageUrl(loadedDraft.imageUrl);
+    if (typeof loadedDraft.currentPrompt  === "string") setCurrentPrompt(loadedDraft.currentPrompt);
+    if (typeof loadedDraft.displayTitle   === "string") setDisplayTitle(loadedDraft.displayTitle);
+    if (typeof loadedDraft.displayTagline === "string") setDisplayTagline(loadedDraft.displayTagline);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedDraft]);
+
   // ── Generate ────────────────────────────────────────────────────────────────
 
   async function handleGenerate() {
@@ -278,6 +303,12 @@ export default function PosterGeneratorPage() {
           </div>
           <div className="flex items-center gap-2">
             <CreditBadge cost={10} label="credits per poster" />
+            <SaveButton
+              status={saveStatus}
+              isDirty={isDirty && isHydrated}
+              lastSavedAt={lastSavedAt}
+              onClick={save}
+            />
           </div>
         </div>
       </div>

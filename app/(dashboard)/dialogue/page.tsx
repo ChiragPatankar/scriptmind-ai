@@ -1,18 +1,33 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  MessageSquare, Sparkles, Plus, Copy, Download, RefreshCw,
-  User, AlertCircle, CheckCircle2, X, ChevronDown, ChevronUp,
-  Pencil, Film, Mic2, Brain, Heart, Users,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CreditBadge } from "@/components/ui/CreditBadge";
+import { Input } from "@/components/ui/input";
+import { SaveButton } from "@/components/ui/SaveButton";
+import { useFeatureDraft } from "@/lib/draft/useFeatureDraft";
+import type { CharacterProfile, GeneratedDialogueLine } from "@/lib/gemini-api";
 import { cn } from "@/lib/utils";
-import type { GeneratedDialogueLine, CharacterProfile } from "@/lib/gemini-api";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    AlertCircle,
+    Brain,
+    CheckCircle2,
+    ChevronDown, ChevronUp,
+    Copy, Download,
+    Film,
+    Heart,
+    MessageSquare,
+    Mic2,
+    Pencil,
+    Plus,
+    RefreshCw,
+    Sparkles,
+    User,
+    Users,
+    X,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -352,6 +367,28 @@ export default function DialoguePage() {
   const [error,      setError]      = useState<string | null>(null);
   const [copied,     setCopied]     = useState(false);
 
+  // ── Draft persistence ────────────────────────────────────────────────────
+  const draftSnapshot = {
+    profiles, scene, subtext, mood, language, style, length, dialogue,
+  };
+  const {
+    loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
+  } = useFeatureDraft("dialogue", draftSnapshot);
+
+  // Rehydrate state once when a saved draft is found
+  useEffect(() => {
+    if (!loadedDraft) return;
+    if (Array.isArray(loadedDraft.profiles))         setProfiles(loadedDraft.profiles);
+    if (typeof loadedDraft.scene === "string")       setScene(loadedDraft.scene);
+    if (typeof loadedDraft.subtext === "string")     setSubtext(loadedDraft.subtext);
+    if (typeof loadedDraft.mood === "string")        setMood(loadedDraft.mood);
+    if (typeof loadedDraft.language === "string")    setLanguage(loadedDraft.language as Language);
+    if (typeof loadedDraft.style === "string")       setStyle(loadedDraft.style);
+    if (loadedDraft.length === "short" || loadedDraft.length === "medium" || loadedDraft.length === "long") setLength(loadedDraft.length);
+    if (Array.isArray(loadedDraft.dialogue))         setDialogue(loadedDraft.dialogue);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loadedDraft]);
+
   const openAddModal  = () => { setEditIdx(null); setModalOpen(true); };
   const openEditModal = (i: number) => { setEditIdx(i); setModalOpen(true); };
 
@@ -431,9 +468,17 @@ export default function DialoguePage() {
 
       {/* Header */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-        <div className="flex items-center gap-2 mb-1">
-          <h1 className="text-3xl font-black text-text-primary">AI Dialogue Generator</h1>
-          <CreditBadge cost={1} label="credit per generation" />
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-1">
+          <div className="flex items-center gap-2">
+            <h1 className="text-3xl font-black text-text-primary">AI Dialogue Generator</h1>
+            <CreditBadge cost={1} label="credit per generation" />
+          </div>
+          <SaveButton
+            status={saveStatus}
+            isDirty={isDirty && isHydrated}
+            lastSavedAt={lastSavedAt}
+            onClick={save}
+          />
         </div>
         <p className="text-text-muted text-sm">Write cinematic dialogues in any language with full character psychology.</p>
       </motion.div>
