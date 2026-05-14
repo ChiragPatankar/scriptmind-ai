@@ -6,11 +6,11 @@
  * Cloudflare Workers — fetch is used instead).
  */
 
-import { NextRequest, NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase-route";
+import { NextRequest, NextResponse } from "next/server";
 
 const PLAN_CONFIG: Record<string, { amount: number; label: string }> = {
-  basic: { amount: 1 * 100,    label: "ScriptMind Basic" },  // TEMP: ₹1 for testing
+  basic: { amount: 499 * 100,  label: "ScriptMind Basic" },
   pro:   { amount: 1299 * 100, label: "ScriptMind Pro"   },
 };
 
