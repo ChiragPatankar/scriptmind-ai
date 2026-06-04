@@ -3,8 +3,9 @@
 import React from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, Sparkles, CheckCircle2 } from "lucide-react";
+import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ScriptMindLogoMark } from "@/components/brand/ScriptMindLogoMark";
 
 const benefits = [
   "Free forever plan available",
@@ -31,9 +32,9 @@ export default function CTASection() {
           viewport={{ once: true }}
           transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
         >
-          {/* Icon */}
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-accent shadow-glow mb-8 mx-auto">
-            <Sparkles className="w-8 h-8 text-white" />
+          {/* Brand mark — same asset as site header */}
+          <div className="mb-8 mx-auto flex justify-center">
+            <ScriptMindLogoMark size="lg" />
           </div>
 
           {/* Heading */}

@@ -6,7 +6,8 @@
 
 // 1 credit = ₹2  |  Basic ₹499 → 250 credits  |  Pro ₹1299 → 700 credits
 export const FEATURE_COSTS = {
-  script_analysis:     2,
+  script_analysis:     3,
+  scene_analysis:      15,
   story_generation:    2,
   script_expand:       6,
   dialogue:            1,
@@ -28,7 +29,8 @@ export const PLAN_CREDITS: Record<string, number> = {
 
 /** Display labels used in UI error messages. */
 export const FEATURE_LABELS: Record<Feature, string> = {
-  script_analysis:     "Script Analysis",
+  script_analysis:     "Quick Script Analysis",
+  scene_analysis:      "Scene-by-Scene Analysis",
   story_generation:    "Story Generation",
   script_expand:       "Expand to Full Script",
   dialogue:            "AI Dialogue",

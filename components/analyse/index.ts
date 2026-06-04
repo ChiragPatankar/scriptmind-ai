@@ -9,3 +9,4 @@ export { CharacterAnalysisSection } from "./CharacterAnalysisSection";
 export { DialogueAnalysisCard } from "./DialogueAnalysisCard";
 export { InsightsSection } from "./InsightsSection";
 export { AnalyseUtilities } from "./AnalyseUtilities";
+export { SceneBySceneDashboard } from "./SceneBySceneSection";

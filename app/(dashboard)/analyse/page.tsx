@@ -1,12 +1,18 @@
 "use client";
 
-import { AnalyseDashboardSkeleton, AnalyseScriptDashboard } from "@/components/analyse";
+import {
+  AnalyseDashboardSkeleton,
+  AnalyseScriptDashboard,
+  SceneBySceneDashboard,
+} from "@/components/analyse";
 import { Button } from "@/components/ui/button";
 import { CreditBadge } from "@/components/ui/CreditBadge";
 import { SaveButton } from "@/components/ui/SaveButton";
 import { analyseScriptFile, analyseScriptText } from "@/lib/analyse-api";
+import { createSceneAnalysisJob, pollSceneAnalysisJob } from "@/lib/scene-analyse-api";
 import { useFeatureDraft } from "@/lib/draft/useFeatureDraft";
 import type { AnalyseScriptReport } from "@/lib/mock/analyse-script";
+import type { SceneAnalysisReport } from "@/lib/mock/scene-analyse";
 import { AnimatePresence, motion } from "framer-motion";
 import {
     AlertCircle,
@@ -27,8 +33,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-type Phase = "upload" | "loading" | "report";
+type Phase = "upload" | "loading" | "report" | "scene_loading" | "scene_report";
 type InputMode = "file" | "text";
+type AnalysisMode = "quick" | "scene";
 
 const ACCEPT = ".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain";
 const MIN_TEXT_LEN = 100;
@@ -46,10 +53,14 @@ export default function AnalysePage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const reportRef    = useRef<HTMLDivElement>(null);
 
-  const [phase,      setPhase]      = useState<Phase>("upload");
-  const [inputMode,  setInputMode]  = useState<InputMode>("file");
-  const [report,     setReport]     = useState<AnalyseScriptReport | null>(null);
-  const [error,      setError]      = useState<string | null>(null);
+  const [phase,         setPhase]         = useState<Phase>("upload");
+  const [analysisMode,  setAnalysisMode]  = useState<AnalysisMode>("quick");
+  const [inputMode,     setInputMode]     = useState<InputMode>("file");
+  const [report,        setReport]        = useState<AnalyseScriptReport | null>(null);
+  const [sceneReport,   setSceneReport]   = useState<SceneAnalysisReport | null>(null);
+  const [sceneProgress, setSceneProgress] = useState(0);
+  const [scenePhaseMsg, setScenePhaseMsg] = useState("");
+  const [error,         setError]         = useState<string | null>(null);
   const [dragOver,   setDragOver]   = useState(false);
   const [pastedText, setPastedText] = useState("");
   const [scriptTitle, setScriptTitle] = useState("");
@@ -57,7 +68,7 @@ export default function AnalysePage() {
   // ── Draft persistence ────────────────────────────────────────────────────
   // Saved fields: input mode, pasted text, script title, and the last report so
   // users can reopen a previous analysis without burning credits again.
-  const draftSnapshot = { inputMode, pastedText, scriptTitle, report };
+  const draftSnapshot = { inputMode, pastedText, scriptTitle, report, sceneReport, analysisMode };
   const {
     loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
   } = useFeatureDraft("analyse", draftSnapshot);
@@ -68,9 +79,15 @@ export default function AnalysePage() {
       setInputMode(loadedDraft.inputMode);
     if (typeof loadedDraft.pastedText  === "string") setPastedText(loadedDraft.pastedText);
     if (typeof loadedDraft.scriptTitle === "string") setScriptTitle(loadedDraft.scriptTitle);
-    if (loadedDraft.report) {
+    if (loadedDraft.sceneReport) {
+      setSceneReport(loadedDraft.sceneReport as SceneAnalysisReport);
+      setPhase("scene_report");
+    } else if (loadedDraft.report) {
       setReport(loadedDraft.report);
       setPhase("report");
+    }
+    if (loadedDraft.analysisMode === "quick" || loadedDraft.analysisMode === "scene") {
+      setAnalysisMode(loadedDraft.analysisMode);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedDraft]);
@@ -95,6 +112,35 @@ export default function AnalysePage() {
     []
   );
 
+  const runSceneAnalysis = useCallback(async (file: File) => {
+    setError(null);
+    setSceneReport(null);
+    setPhase("scene_loading");
+    setSceneProgress(0);
+    setScenePhaseMsg("Starting…");
+
+    try {
+      const { jobId } = await createSceneAnalysisJob(file);
+      const result = await pollSceneAnalysisJob(jobId, {
+        intervalMs: 2500,
+        onUpdate: (job) => {
+          setSceneProgress(job.progress_pct);
+          setScenePhaseMsg(job.phase_message ?? job.status);
+        },
+      });
+      setSceneReport(result);
+      setPhase("scene_report");
+      window.dispatchEvent(new CustomEvent("credits-changed"));
+      window.setTimeout(() => {
+        reportRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+    } catch (e) {
+      setPhase("upload");
+      setSceneReport(null);
+      setError(e instanceof Error ? e.message : "Scene analysis failed.");
+    }
+  }, []);
+
   const handleFile = useCallback(
     (fileList: FileList | null) => {
       const file = fileList?.[0];
@@ -103,9 +149,13 @@ export default function AnalysePage() {
         setError("Please upload a PDF, DOCX, or TXT file.");
         return;
       }
-      void runAnalysis(() => analyseScriptFile(file));
+      if (analysisMode === "scene") {
+        void runSceneAnalysis(file);
+      } else {
+        void runAnalysis(() => analyseScriptFile(file));
+      }
     },
-    [runAnalysis]
+    [analysisMode, runAnalysis, runSceneAnalysis]
   );
 
   const handleTextAnalyse = useCallback(() => {
@@ -115,12 +165,19 @@ export default function AnalysePage() {
       return;
     }
     const title = scriptTitle.trim() || "pasted-script";
-    void runAnalysis(() => analyseScriptText(trimmed, title));
-  }, [pastedText, scriptTitle, runAnalysis]);
+    if (analysisMode === "scene") {
+      const blob = new Blob([trimmed], { type: "text/plain" });
+      const file = new File([blob], `${title}.txt`, { type: "text/plain" });
+      void runSceneAnalysis(file);
+    } else {
+      void runAnalysis(() => analyseScriptText(trimmed, title));
+    }
+  }, [pastedText, scriptTitle, runAnalysis, analysisMode, runSceneAnalysis]);
 
   const reset = useCallback(() => {
     setPhase("upload");
     setReport(null);
+    setSceneReport(null);
     setError(null);
     setPastedText("");
     setScriptTitle("");
@@ -158,7 +215,10 @@ export default function AnalysePage() {
                   <div>
                     <div className="flex items-center gap-2">
                       <h1 className="text-2xl font-black text-text-primary leading-tight">Analyse Script</h1>
-                      <CreditBadge cost={2} label="credits per analysis" />
+                      <CreditBadge
+                        cost={analysisMode === "scene" ? 15 : 3}
+                        label="credits per run"
+                      />
                     </div>
                     <p className="text-xs text-text-muted">AI-powered screenplay intelligence — emotion, character, and structure</p>
                   </div>
@@ -198,6 +258,46 @@ export default function AnalysePage() {
                 <div>{error}</div>
               </motion.div>
             )}
+
+            {/* Analysis mode */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+              <button
+                type="button"
+                onClick={() => { setAnalysisMode("quick"); setError(null); }}
+                className={`text-left rounded-2xl border p-5 transition-all ${
+                  analysisMode === "quick"
+                    ? "border-accent bg-accent/10 ring-1 ring-accent/40"
+                    : "border-border bg-surface hover:border-border/80"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-text-primary">Quick Analysis</span>
+                  <CreditBadge cost={3} size="sm" />
+                </div>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  Holistic scores, character arcs, and emotion spectrum (~first 60 pages). Fast.
+                </p>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAnalysisMode("scene"); setError(null); }}
+                className={`text-left rounded-2xl border p-5 transition-all ${
+                  analysisMode === "scene"
+                    ? "border-secondary bg-secondary/10 ring-1 ring-secondary/40"
+                    : "border-border bg-surface hover:border-border/80"
+                }`}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-bold text-text-primary flex items-center gap-1.5">
+                    Scene-by-Scene <span className="text-secondary">⭐</span>
+                  </span>
+                  <CreditBadge cost={15} size="sm" />
+                </div>
+                <p className="text-xs text-text-muted leading-relaxed">
+                  Full script · per-scene scores · rewrite notes · 1–3 min (Basic: 5/mo, Pro: 25/mo).
+                </p>
+              </button>
+            </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
               {/* ── Left: Upload panel ── */}
@@ -274,7 +374,13 @@ export default function AnalysePage() {
                     <div className="mt-3 flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-500/5 border border-amber-500/15">
                       <Zap className="w-3.5 h-3.5 text-amber-400 flex-shrink-0" />
                       <p className="text-xs text-amber-400/80">
-                        <span className="font-semibold text-amber-400">2 credits</span> will be deducted when the analysis starts. Rate limit: 10 analyses/day.
+                        <span className="font-semibold text-amber-400">
+                          {analysisMode === "scene" ? "15 credits" : "3 credits"}
+                        </span>{" "}
+                        when analysis starts.
+                        {analysisMode === "scene"
+                          ? " Monthly plan limits apply (Basic 5, Pro 25)."
+                          : " Rate limit: 10 quick analyses/day."}
                       </p>
                     </div>
                   </motion.div>
@@ -326,7 +432,7 @@ export default function AnalysePage() {
                         <Brain className="w-4 h-4 mr-2" />
                         Analyze Script
                       </Button>
-                      <CreditBadge cost={2} />
+                      <CreditBadge cost={analysisMode === "scene" ? 15 : 3} />
                     </div>
                   </motion.div>
                 )}
@@ -385,19 +491,46 @@ export default function AnalysePage() {
             <div className="flex items-center gap-3 mb-8 px-4 py-3 rounded-xl border border-accent/25 bg-accent/5">
               <Loader2 className="w-5 h-5 text-accent animate-spin shrink-0" />
               <div>
-                <p className="text-sm font-semibold text-text-primary">Analyzing with Gemini AI…</p>
-                <p className="text-xs text-text-muted">Extracting emotions, character arcs, and structure. This takes 15–30 s.</p>
+                <p className="text-sm font-semibold text-text-primary">Quick analysis with Gemini…</p>
+                <p className="text-xs text-text-muted">Extracting emotions, character arcs, and structure. ~15–30 s.</p>
               </div>
+            </div>
+            <AnalyseDashboardSkeleton />
+          </motion.div>
+        )}
+
+        {phase === "scene_loading" && (
+          <motion.div key="scene-loading" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+            <div className="mb-8 px-4 py-4 rounded-xl border border-secondary/25 bg-secondary/5">
+              <div className="flex items-center gap-3 mb-4">
+                <Loader2 className="w-5 h-5 text-secondary animate-spin shrink-0" />
+                <div>
+                  <p className="text-sm font-semibold text-text-primary">Scene-by-scene analysis…</p>
+                  <p className="text-xs text-text-muted">{scenePhaseMsg || "Processing"}</p>
+                </div>
+              </div>
+              <div className="h-2 rounded-full bg-surface-3 overflow-hidden">
+                <div
+                  className="h-full bg-secondary transition-all duration-500"
+                  style={{ width: `${sceneProgress}%` }}
+                />
+              </div>
+              <p className="text-[11px] text-text-muted mt-2">{sceneProgress}% — do not close this tab</p>
             </div>
             <AnalyseDashboardSkeleton />
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* ── Report ── */}
       {phase === "report" && report && (
         <div ref={reportRef} className="scroll-mt-6">
           <AnalyseScriptDashboard report={report} onAnalyseAnother={reset} />
+        </div>
+      )}
+
+      {phase === "scene_report" && sceneReport && (
+        <div ref={reportRef} className="scroll-mt-6">
+          <SceneBySceneDashboard report={sceneReport} onAnalyseAnother={reset} />
         </div>
       )}
     </div>

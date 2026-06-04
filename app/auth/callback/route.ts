@@ -1,60 +1,69 @@
-import { NextResponse } from "next/server";
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { NextRequest, NextResponse } from "next/server";
+import { createRouteSupabase } from "@/lib/supabase-route";
 
 /**
- * OAuth / Magic-link callback handler.
- * Supabase redirects here after Google (or any OAuth) login.
- * Exchanges the ?code= param for a real session, then redirects to the app.
+ * OAuth / magic-link callback.
+ * Must use createRouteSupabase (request cookies → response cookies).
+ * Using cookies() from next/headers breaks PKCE on Cloudflare Workers.
  */
-export async function GET(request: Request) {
-  const { searchParams, origin } = new URL(request.url);
+export async function GET(request: NextRequest) {
+  const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
-  const next = searchParams.get("next") ?? "/projects";
+  let next = searchParams.get("next") ?? "/projects";
+  if (!next.startsWith("/")) {
+    next = "/projects";
+  }
+
+  const origin = request.nextUrl.origin;
 
   if (code) {
-    const cookieStore = cookies();
-
-    const supabase = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      {
-        cookies: {
-          getAll() {
-            return cookieStore.getAll();
-          },
-          setAll(cookiesToSet) {
-            cookiesToSet.forEach(({ name, value, options }) => {
-              cookieStore.set(name, value, options);
-            });
-          },
-        },
-      }
-    );
+    const { supabase, applyCookies } = createRouteSupabase(request);
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // For brand-new OAuth users (no plan set), send to plan selection.
-      // Existing users (plan already set) go directly to the requested page.
-      const { data: { user } } = await supabase.auth.getUser();
+      let redirectPath = next;
+
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
       if (user) {
         const { data: userRow } = await supabase
           .from("users")
           .select("plan")
           .eq("id", user.id)
-          .single();
+          .maybeSingle();
 
-        // No row or plan is still 'free' and this is a ?new=1 signup redirect
         const isNewUser = !userRow || searchParams.get("new") === "1";
-        if (isNewUser && next === "/projects") {
-          return NextResponse.redirect(`${origin}/onboarding`);
+        if (isNewUser && redirectPath === "/projects") {
+          redirectPath = "/onboarding";
         }
       }
-      return NextResponse.redirect(`${origin}${next}`);
+
+      const forwardedHost = request.headers.get("x-forwarded-host");
+      const isLocalEnv = process.env.NODE_ENV === "development";
+      let redirectUrl: string;
+      if (isLocalEnv) {
+        redirectUrl = `${origin}${redirectPath}`;
+      } else if (forwardedHost) {
+        redirectUrl = `https://${forwardedHost}${redirectPath}`;
+      } else {
+        redirectUrl = `${origin}${redirectPath}`;
+      }
+
+      return applyCookies(NextResponse.redirect(redirectUrl));
     }
+
+    console.error("[auth/callback] exchangeCodeForSession:", error.message);
   }
 
-  // Something went wrong — send user back to login with an error hint
-  return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+  const failUrl = new URL("/login", origin);
+  failUrl.searchParams.set("error", "auth_failed");
+  const oauthError =
+    searchParams.get("error_description") ?? searchParams.get("error");
+  if (oauthError) {
+    failUrl.searchParams.set("reason", oauthError);
+  }
+  return NextResponse.redirect(failUrl);
 }

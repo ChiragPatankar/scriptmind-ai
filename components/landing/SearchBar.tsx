@@ -2,19 +2,37 @@
 
 import React, { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Search, Sparkles, Film, FolderOpen, Lightbulb } from "lucide-react";
+import { Search, Sparkles, FolderOpen, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
 const suggestions = [
-  { icon: Search,     label: "Search scripts",          desc: "Browse thousands of Bollywood scripts",  color: "text-accent" },
-  { icon: FolderOpen, label: "Start a new project",     desc: "Kickstart your film project",            color: "text-secondary" },
-  { icon: Lightbulb,  label: "Generate story idea",     desc: "Let AI craft your next concept",         color: "text-yellow-400" },
-  { icon: Film,       label: "Explore screenplay tools", desc: "Write, edit and analyse your script",   color: "text-blue-400" },
+  {
+    icon: Search,
+    label: "See all tools",
+    desc: "Writing, analysis, visualization & finance in one workspace",
+    color: "text-accent",
+  },
+  {
+    icon: FolderOpen,
+    label: "Start a new project",
+    desc: "Kickstart your film or series in one place",
+    color: "text-secondary",
+  },
+  {
+    icon: Lightbulb,
+    label: "Generate story idea",
+    desc: "Let AI help shape your next concept",
+    color: "text-yellow-400",
+  },
 ];
 
 const quickTags = [
-  "Drama script", "Action screenplay", "Budget planner", "AI dialogue", "Script analysis",
+  "Drama outline",
+  "Action premise",
+  "Budget planner",
+  "AI dialogue",
+  "Analyse script",
 ];
 
 interface SearchBarProps {
@@ -76,7 +94,7 @@ export default function SearchBar({ onSearch, className }: SearchBarProps) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             onFocus={() => { setFocused(true); setShowDrop(true); }}
-            placeholder="Search scripts, projects, or explore ideas..."
+            placeholder="Search tools, your projects, or ideas..."
             className="flex-1 h-14 pl-12 pr-4 bg-transparent text-text-primary placeholder:text-text-muted text-sm sm:text-base outline-none rounded-2xl"
           />
 

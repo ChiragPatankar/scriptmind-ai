@@ -5,8 +5,8 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
-import Image from "next/image";
 import { Button } from "@/components/ui/button";
+import { ScriptMindLogoMark } from "@/components/brand/ScriptMindLogoMark";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -50,17 +50,7 @@ export default function Navbar() {
           <div className="flex items-center justify-between h-16 lg:h-18">
             {/* Logo */}
             <Link href="/" className="flex items-center gap-2.5 group flex-shrink-0">
-              {/* Logo icon in white pill (preserves colors on dark bg) */}
-              <div className="relative w-9 h-9 rounded-xl overflow-hidden bg-white flex items-center justify-center p-1 shadow-[0_0_16px_rgba(29,119,197,0.35)] group-hover:shadow-[0_0_24px_rgba(29,119,197,0.55)] transition-shadow duration-300">
-                <Image
-                  src="/logo.png"
-                  alt="ScriptMind AI"
-                  width={32}
-                  height={32}
-                  className="object-contain"
-                  priority
-                />
-              </div>
+              <ScriptMindLogoMark size="sm" priority />
               <span className="text-lg font-bold text-text-primary tracking-tight">
                 ScriptMind{" "}
                 <span style={{

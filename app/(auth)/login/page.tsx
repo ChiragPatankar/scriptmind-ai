@@ -35,7 +35,12 @@ function LoginForm() {
 
   useEffect(() => {
     if (searchParams.get("error") === "auth_failed") {
-      setError("OAuth login failed. Please try again.");
+      const reason = searchParams.get("reason");
+      setError(
+        reason
+          ? `Google sign-in failed: ${reason}`
+          : "Google sign-in failed. Please try again."
+      );
     }
   }, [searchParams]);
 

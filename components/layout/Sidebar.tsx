@@ -2,7 +2,7 @@
 
 import React, { useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { ScriptMindLogoMark } from "@/components/brand/ScriptMindLogoMark";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -116,18 +116,7 @@ export default function Sidebar() {
         {/* ── Logo ── */}
         <div className="flex items-center h-16 px-4 border-b border-border flex-shrink-0">
           <Link href="/" className="flex items-center gap-2.5 min-w-0">
-            {/* Logo icon — white pill preserves the logo's own colours */}
-            <div className="w-8 h-8 rounded-lg flex-shrink-0 bg-white flex items-center justify-center p-1
-                            shadow-[0_0_14px_rgba(29,119,197,0.35)] overflow-hidden">
-              <Image
-                src="/logo.png"
-                alt="ScriptMind AI"
-                width={28}
-                height={28}
-                className="object-contain"
-                priority
-              />
-            </div>
+            <ScriptMindLogoMark size="md" priority />
 
             <AnimatePresence>
               {!sidebarCollapsed && (

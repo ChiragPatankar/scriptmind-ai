@@ -10,30 +10,19 @@ const footerColumns = [
     title: "Company",
     links: [
       { label: "About Us", href: "/about" },
-      { label: "Careers", href: "/careers" },
-      { label: "Blog", href: "/blog" },
-      { label: "Press Kit", href: "/press" },
-      { label: "Contact", href: "/contact" },
+      { label: "Home", href: "/" },
+      { label: "Pricing", href: "/pricing" },
     ],
   },
   {
-    title: "Explore ScriptMind",
+    title: "Explore",
     links: [
-      { label: "Bollywood Hub", href: "/" },
-      { label: "Script Database", href: "/scripts" },
-      { label: "AI Stories", href: "/create-story" },
-      { label: "Dialogue Studio", href: "/dialogue" },
-      { label: "Script Analysis", href: "/analyse" },
-    ],
-  },
-  {
-    title: "Features",
-    links: [
-      { label: "AI Dialogue Generator", href: "/dialogue" },
-      { label: "Script Analyser", href: "/analyse" },
-      { label: "Story Creator", href: "/create-story" },
-      { label: "Script Downloads", href: "/download-scripts" },
-      { label: "API Access", href: "/api-docs" },
+      { label: "Analyse script", href: "/analyse" },
+      { label: "AI dialogue", href: "/dialogue" },
+      { label: "Create story", href: "/create-story" },
+      { label: "Visualize scene", href: "/visualize" },
+      { label: "Poster generator", href: "/poster" },
+      { label: "Finance studio", href: "/financial" },
     ],
   },
   {
@@ -50,10 +39,8 @@ const footerColumns = [
     title: "Help",
     links: [
       { label: "Documentation", href: "/api-docs" },
-      { label: "Support Center", href: "/support" },
-      { label: "Community Forum", href: "/community" },
+      { label: "Support center", href: "/support" },
       { label: "Tutorials", href: "/tutorial" },
-      { label: "Status Page", href: "/status" },
     ],
   },
 ];
@@ -68,24 +55,29 @@ const socialLinks = [
 export default function Footer() {
   return (
     <footer className="relative bg-surface border-t border-border overflow-hidden">
-      {/* Ambient glow */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[1px] bg-gradient-to-r from-transparent via-accent/30 to-transparent" />
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-16 pb-8">
-        {/* Top Section */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-8 pb-12 border-b border-border">
-          {/* Brand Column */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-8 pb-12 border-b border-border">
           <div className="col-span-2 md:col-span-3 lg:col-span-1">
             <Link href="/" className="flex items-center gap-2.5 mb-4 group w-fit">
-              <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0">
-                <Image src="/logo.png" alt="ScriptMind AI" width={32} height={32} className="w-full h-full object-contain" />
+              <div className="w-8 h-8 rounded-lg overflow-hidden flex-shrink-0 bg-white flex items-center justify-center p-0.5">
+                <Image
+                  src="/logo.png"
+                  alt="ScriptMind AI"
+                  width={32}
+                  height={32}
+                  className="w-full h-full object-contain"
+                  unoptimized
+                />
               </div>
               <span className="text-base font-bold text-text-primary">
                 ScriptMind <span className="text-gradient">AI</span>
               </span>
             </Link>
-            <p className="text-sm text-text-muted leading-relaxed mb-5 max-w-[200px]">
-              The ultimate AI-powered platform for Bollywood scripts, stories, and dialogues.
+            <p className="text-sm text-text-muted leading-relaxed mb-5 max-w-[220px]">
+              AI-powered tools for screenwriters and producers worldwide — scripts, dialogue,
+              analysis, and planning in one place.
             </p>
             <div className="flex items-center gap-3">
               {socialLinks.map(({ icon: Icon, href, label }) => (
@@ -103,12 +95,9 @@ export default function Footer() {
             </div>
           </div>
 
-          {/* Nav Columns */}
           {footerColumns.map((col) => (
             <div key={col.title}>
-              <h4 className="text-sm font-semibold text-text-primary mb-4">
-                {col.title}
-              </h4>
+              <h4 className="text-sm font-semibold text-text-primary mb-4">{col.title}</h4>
               <ul className="space-y-2.5">
                 {col.links.map((link) => (
                   <li key={link.label}>
@@ -125,15 +114,14 @@ export default function Footer() {
           ))}
         </div>
 
-        {/* Bottom Section */}
         <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8">
           <p className="text-xs text-text-muted">
             © {new Date().getFullYear()} ScriptMind AI. All rights reserved.
           </p>
-          <div className="flex items-center gap-1 text-xs text-text-muted">
+          <div className="flex items-center gap-1 text-xs text-text-muted text-center">
             <span>Made with</span>
             <span className="text-red-400">♥</span>
-            <span>for Bollywood storytellers</span>
+            <span>for storytellers everywhere</span>
           </div>
           <div className="flex items-center gap-1">
             <div className="w-2 h-2 rounded-full bg-secondary animate-pulse" />

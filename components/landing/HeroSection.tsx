@@ -1,14 +1,18 @@
 "use client";
 
-import React, { useRef, useMemo } from "react";
+import { Button } from "@/components/ui/button";
 import { motion, useScroll, useTransform } from "framer-motion";
+import {
+    ArrowRight, ChevronDown,
+    DollarSign,
+    Film,
+    MessageSquare,
+    Sparkles,
+    TrendingUp,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import {
-  ArrowRight, ChevronDown, Sparkles,
-  Film, DollarSign, MessageSquare, TrendingUp,
-} from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { useMemo, useRef } from "react";
 import SearchBar from "./SearchBar";
 
 // ── Branding colors (matching logo: dark-navy → blue → cyan) ────────────────
