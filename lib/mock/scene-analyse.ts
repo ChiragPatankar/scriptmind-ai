@@ -5,6 +5,8 @@
 export interface SceneRow {
   scene_number: number;
   heading: string;
+  /** Raw screenplay text of the scene. Absent on analyses run before this field existed. */
+  content?: string;
   characters: string[];
   length_chars: number;
   length_lines: number;
@@ -17,6 +19,8 @@ export interface SceneRow {
   conflict_score: number;
   dialogue_quality: number;
   composite_score: number;
+  /** Per-scene 27-emotion spectrum (emotion key → 0..1 intensity); sparse — only present emotions. */
+  emotion_spectrum?: Record<string, number>;
   rewrite_suggestions: string[];
 }
 

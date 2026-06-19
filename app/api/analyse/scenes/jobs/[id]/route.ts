@@ -4,6 +4,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createRouteSupabase } from "@/lib/supabase-route";
+import { refundSceneJobIfNeeded } from "@/lib/credits/refundSceneJob";
 
 type Params = { params: { id: string } };
 
@@ -40,5 +41,11 @@ export async function GET(req: NextRequest, { params }: Params) {
     );
   }
 
-  return applyCookies(NextResponse.json(job));
+  // A scene job costs credits up front; refund them once if the job failed.
+  let refunded = false;
+  if (job.status === "failed") {
+    refunded = await refundSceneJobIfNeeded(job.id as string, user.id);
+  }
+
+  return applyCookies(NextResponse.json({ ...job, refunded }));
 }

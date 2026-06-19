@@ -4,6 +4,13 @@
 
 import type { SceneAnalysisJob, SceneAnalysisReport } from "@/lib/mock/scene-analyse";
 
+/** Tell the rest of the app the credit balance may have changed (e.g. after a refund). */
+function notifyCreditsChanged(): void {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent("credits-changed"));
+  }
+}
+
 function mapJob(row: Record<string, unknown>): SceneAnalysisJob {
   return {
     id: String(row.id),
@@ -35,6 +42,8 @@ export async function createSceneAnalysisJob(file: File): Promise<{
   };
 
   if (!res.ok) {
+    // A failed worker trigger refunds the credits server-side — refresh the badge.
+    notifyCreditsChanged();
     throw new Error(payload.message ?? payload.error ?? `Request failed (${res.status})`);
   }
 
@@ -77,6 +86,8 @@ export async function pollSceneAnalysisJob(
       return job.result;
     }
     if (job.status === "failed") {
+      // The poll endpoint refunds credits for failed jobs — refresh the badge.
+      notifyCreditsChanged();
       throw new Error(job.error ?? "Scene analysis failed.");
     }
 

@@ -1,5 +1,11 @@
-/** @type {import('next').NextConfig} */
-const nextConfig = {
+import { PHASE_DEVELOPMENT_SERVER } from "next/constants.js";
+
+/** @type {(phase: string) => import('next').NextConfig} */
+const buildConfig = (phase) => {
+  const isDev = phase === PHASE_DEVELOPMENT_SERVER;
+
+  /** @type {import('next').NextConfig} */
+  const nextConfig = {
   // Gzip/Brotli compress all responses
   compress: true,
 
@@ -39,16 +45,25 @@ const nextConfig = {
     return config;
   },
 
-  experimental: {
-    // Tree-shake these packages so only used icons/components are bundled
-    optimizePackageImports: [
-      "lucide-react",
-      "framer-motion",
-      "recharts",
-      "@radix-ui/react-slider",
-      "@radix-ui/react-dropdown-menu",
-    ],
-  },
+  // `optimizePackageImports` rewrites barrel imports into deep imports. It
+  // helps the production bundle, but in `next dev` it intermittently breaks
+  // module resolution ("Cannot read properties of undefined (reading 'call')"),
+  // so enable it for production builds only.
+  experimental: isDev
+    ? {}
+    : {
+        // Tree-shake these packages so only used icons/components are bundled
+        optimizePackageImports: [
+          "lucide-react",
+          "framer-motion",
+          "recharts",
+          "@radix-ui/react-slider",
+          "@radix-ui/react-dropdown-menu",
+        ],
+      },
+  };
+
+  return nextConfig;
 };
 
-export default nextConfig;
+export default buildConfig;

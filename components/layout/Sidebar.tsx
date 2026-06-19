@@ -20,9 +20,11 @@ import {
   X,
   Camera,
   Clapperboard,
+  Fingerprint,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/lib/store";
+import { useCredits } from "@/hooks/useCredits";
 
 const navItems = [
   {
@@ -36,6 +38,7 @@ const navItems = [
     section: "Tools",
     items: [
       { label: "Analyse Script",   href: "/analyse",           icon: BarChart3    },
+      { label: "Originality",      href: "/originality",       icon: Fingerprint  },
       { label: "AI Dialogue",      href: "/dialogue",          icon: MessageSquare },
       { label: "Create Story",     href: "/create-story",      icon: PenTool      },
       { label: "Visualize Scene",  href: "/visualize",         icon: Camera          },
@@ -62,6 +65,12 @@ const easing = [0.22, 1, 0.36, 1] as const;
 export default function Sidebar() {
   const pathname          = usePathname();
   const { sidebarCollapsed, toggleSidebar } = useUIStore();
+  const { plan, isExpired, loading: creditsLoading } = useCredits();
+
+  // Only nudge users who aren't on an active paid plan. Hide while loading to
+  // avoid a flash of the banner for Pro accounts.
+  const onPaidPlan = !!plan && plan !== "free" && !isExpired;
+  const showUpgradeBanner = !creditsLoading && !onPaidPlan;
 
   // Auto-collapse on small screens, auto-expand on large screens
   useEffect(() => {
@@ -164,7 +173,7 @@ export default function Sidebar() {
 
                   return (
                     <Link
-                      key={item.href}
+                      key={item.label}
                       href={item.href}
                       title={sidebarCollapsed ? item.label : undefined}
                       className={cn(
@@ -217,9 +226,9 @@ export default function Sidebar() {
           ))}
         </nav>
 
-        {/* ── Upgrade banner ── */}
+        {/* ── Upgrade banner (hidden for active paid plans) ── */}
         <AnimatePresence>
-          {!sidebarCollapsed && (
+          {!sidebarCollapsed && showUpgradeBanner && (
             <motion.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: "auto" }}

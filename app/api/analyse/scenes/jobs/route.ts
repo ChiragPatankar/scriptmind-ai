@@ -5,6 +5,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase-admin";
 import { withSceneAnalysis } from "@/lib/credits/withSceneAnalysis";
+import { addCredits } from "@/lib/credits/manage";
+import { FEATURE_COSTS } from "@/lib/credits/costs";
 
 export const POST = withSceneAnalysis(async (req: NextRequest, userId) => {
   const form = await req.formData();
@@ -50,6 +52,27 @@ export const POST = withSceneAnalysis(async (req: NextRequest, userId) => {
   );
   const secret = process.env.SCENE_JOB_PROCESS_SECRET ?? "";
 
+  // Credits were already deducted by withSceneAnalysis. If we can't even hand the
+  // job to the worker, return them immediately and mark the job refunded so the
+  // poll path never double-refunds.
+  const refundFailedTrigger = async (error: string) => {
+    // Mark failed first (always succeeds even if the refund column is unmigrated).
+    await admin.from("analysis_jobs").update({ status: "failed", error }).eq("id", jobId);
+    // Then refund once, guarded by the refunded flag so the poll path won't double-refund.
+    const { data, error: flagErr } = await admin
+      .from("analysis_jobs")
+      .update({ refunded: true })
+      .eq("id", jobId)
+      .eq("refunded", false)
+      .select("id");
+    if (flagErr || !data || data.length === 0) return; // poll path will retry the refund
+    try {
+      await addCredits(userId, FEATURE_COSTS.scene_analysis, "scene_analysis_refund");
+    } catch {
+      await admin.from("analysis_jobs").update({ refunded: false }).eq("id", jobId);
+    }
+  };
+
   const triggerForm = new FormData();
   triggerForm.append("job_id", jobId);
   triggerForm.append("file", file, name);
@@ -63,13 +86,7 @@ export const POST = withSceneAnalysis(async (req: NextRequest, userId) => {
 
     if (!triggerRes.ok) {
       const detail = await triggerRes.text().catch(() => "");
-      await admin
-        .from("analysis_jobs")
-        .update({
-          status: "failed",
-          error: `Worker trigger failed: ${detail.slice(0, 200)}`,
-        })
-        .eq("id", jobId);
+      await refundFailedTrigger(`Worker trigger failed: ${detail.slice(0, 200)}`);
 
       return NextResponse.json(
         {
@@ -81,10 +98,7 @@ export const POST = withSceneAnalysis(async (req: NextRequest, userId) => {
     }
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Network error";
-    await admin
-      .from("analysis_jobs")
-      .update({ status: "failed", error: msg })
-      .eq("id", jobId);
+    await refundFailedTrigger(msg);
 
     return NextResponse.json(
       { error: "WORKER_UNREACHABLE", message: "Analysis server unreachable." },

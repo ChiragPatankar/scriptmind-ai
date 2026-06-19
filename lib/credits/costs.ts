@@ -16,6 +16,7 @@ export const FEATURE_COSTS = {
   finance_report:      5,
   poster_generate:     10,
   poster_regenerate:   5,
+  originality:         10,
 } as const;
 
 export type Feature = keyof typeof FEATURE_COSTS;
@@ -39,4 +40,5 @@ export const FEATURE_LABELS: Record<Feature, string> = {
   finance_report:      "Finance Studio Report",
   poster_generate:     "Poster Generator",
   poster_regenerate:   "Poster Regeneration",
+  originality:         "Originality Intelligence",
 };

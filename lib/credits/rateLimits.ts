@@ -17,4 +17,5 @@ export const DAILY_LIMITS: Record<Feature, number | null> = {
   finance_report:      null,
   poster_generate:     null,
   poster_regenerate:   null,
+  originality:         null,
 };

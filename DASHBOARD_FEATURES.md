@@ -10,7 +10,7 @@ A complete reference for every page in the `(dashboard)` route group, covering f
 2. [Dashboard Shell](#2-dashboard-shell)
 3. [My Projects — `/projects`](#3-my-projects--projects)
 4. [Project Detail — `/projects/[id]`](#4-project-detail--projectsid)
-5. [Analyse Script — `/analyse`](#5-analyse-script--analyse)
+5. [Analyse Script — `/analyse`](#5-analyse-script--analyse) — [Quick](#5a-quick-script-analysis) · [Scene-by-Scene](#5b-scene-by-scene-analysis)
 6. [Finance Studio — `/financial`](#6-finance-studio--financial)
 7. [Create Story — `/create-story`](#7-create-story--create-story)
 8. [AI Dialogue — `/dialogue`](#8-ai-dialogue--dialogue)
@@ -30,7 +30,8 @@ A complete reference for every page in the `(dashboard)` route group, covering f
 | Styling | **Tailwind CSS** + `tailwindcss-animate` | CSS custom properties for theming |
 | UI Primitives | **Radix UI** | Dialog, Dropdown, Tabs, Tooltip, Progress |
 | Animation | **Framer Motion** | Layout animations, page transitions |
-| Charts | **Recharts** | Used in Finance Studio |
+| Charts | **Recharts** | Finance Studio, Analyse (Quick + Scene-by-Scene) |
+| Credits / billing | **Supabase** + Razorpay | Server-side deduction via `lib/credits/` |
 | State Management | **Zustand** + `persist` | `localStorage` for auth & projects |
 | Forms | **react-hook-form** + **zod** | Validation on forms |
 | Server State | **@tanstack/react-query** | Provider installed; not yet used in pages |
@@ -52,8 +53,10 @@ All dashboard routes share a common shell composed of:
   - Analyse Script `/analyse`
   - AI Dialogue `/dialogue`
   - Create Story `/create-story`
+  - Visualize Scene `/visualize`
+  - Poster Generator `/poster`
   - Finance Studio `/financial`
-  - Download Scripts `/download-scripts`
+  - Usage Dashboard `/download-scripts`
   - Tutorial `/tutorial`
   - Settings `/settings`
 - **`DashboardNavbar`** (`components/layout/DashboardNavbar.tsx`) — dynamic route title, theme toggle, notifications stub, Radix user-menu dropdown.
@@ -129,39 +132,144 @@ All dashboard routes share a common shell composed of:
 
 **File:** `app/(dashboard)/analyse/page.tsx`
 
-### Features
+The analyse page offers **two independent modes**. They supplement each other but run separate pipelines, cost separate credits, and produce separate reports.
+
+| Mode | Credits | Plan gate | Output |
+|---|---|---|---|
+| **Quick** | 3 | Active subscription | Holistic script report (single Gemini call, ~15k char truncate) |
+| **Scene-by-Scene** | 15 | Basic / Pro (+ monthly quota) | Per-scene table, emotional curve, rewrite notes (async job) |
+
+### Shared upload UX
 
 | Feature | Detail |
 |---|---|
-| Upload flow | PDF, DOCX, or TXT file upload via drag-or-click zone |
-| Paste flow | Text paste (≥ 100 characters required) |
-| Loading state | `AnalyseDashboardSkeleton` component during API call |
-| Full analysis report | Rendered by `AnalyseScriptDashboard` (`components/analyse/`) |
-| Report sections | Overall score, Character analysis, Dialogue quality, Emotion distribution, Scene timeline, Similar stories, AI insights |
-| PDF export | `lib/exportAnalysePDF.ts` using jsPDF + html2canvas |
-| Error handling | User-facing error message with retry option |
+| Mode selector | Toggle **Quick** vs **Scene-by-Scene** before upload |
+| Upload flow | PDF, DOCX, or TXT via drag-or-click zone |
+| Paste flow | Text paste (≥ 100 characters); Scene mode wraps paste as a `.txt` file |
+| Draft persistence | `useFeatureDraft("analyse")` — saves input mode, pasted text, title, and last Quick or Scene report to `localStorage` (no re-run on refresh) |
+| Credit badge | Shows 3 or 15 credits depending on selected mode |
+| Error handling | User-facing error message; failed Scene jobs auto-refund the 15 credits |
 
-### Analysis Report Components (`components/analyse/`)
+---
+
+### 5a. Quick Script Analysis
+
+| Feature | Detail |
+|---|---|
+| Loading state | `AnalyseDashboardSkeleton` during synchronous API call |
+| Full report | `AnalyseScriptDashboard` (`components/analyse/`) |
+| Report sections | Overall metrics, 27-emotion timeline & distribution, character analysis, dialogue card, scene timeline, similar stories, AI insights |
+| PDF export | `lib/exportAnalysePDF.ts` / `lib/pdf/downloadReport.ts` (Quick); `lib/exportSceneAnalysePDF.ts` (Scene-by-Scene) |
+
+#### Quick report components (`components/analyse/`)
 
 | Component | Purpose |
 |---|---|
 | `AnalyseScriptDashboard` | Main container, section orchestration |
-| Metrics section | Score cards for overall, dialogue, structure |
-| Character analysis | Per-character stats, arc, screen time |
-| Emotion distribution | Emotion breakdown |
-| Scene timeline | Visual timeline of scenes |
-| Dialogue card | Sample dialogue quality |
-| Insights panel | AI-generated recommendations |
-| Similar stories | Comparable titles |
+| `MetricCardsSection` | Originality, hook, engagement, emotional depth |
+| `EmotionalTimelineSection` | Multi-emotion intensity over scenes (labeled emotions, e.g. joy, tension) |
+| `EmotionDistributionSection` | 27-emotion spectrum breakdown |
+| `CharacterAnalysisSection` | Per-character stats, arcs, screen time |
+| `DialogueAnalysisCard` | Dialogue quality summary |
+| `InsightsSection` | AI recommendations |
+| `SimilarStories` | Comparable titles |
+| `AnalyseUtilities` | Export / utility actions |
 
-### API Integration
+#### Quick API integration
 
-- **File:** `lib/analyse-api.ts`
-- **Endpoint:** `POST {NEXT_PUBLIC_ANALYSE_API_URL}/api/v1/scripts/analyse`
-  - Default base URL: `http://127.0.0.1:8000` (local FastAPI server)
-- **File upload:** `FormData` multipart request.
-- **Text paste:** JSON body with script text.
-- Response is mapped from snake_case API fields into the `AnalyseScriptReport` TypeScript type.
+| Layer | Detail |
+|---|---|
+| Client | `lib/analyse-api.ts` → `POST /api/analyse` |
+| Next.js route | `app/api/analyse/route.ts` — `withCredits("script_analysis")` |
+| Backend | `POST {NEXT_PUBLIC_ANALYSE_API_URL}/api/v1/scripts/analyse` (Hugging Face FastAPI) |
+| Backend service | `backend/services/gemini_service.py` — one holistic JSON response |
+| Daily limit | 10 Quick analyses per user per day (`lib/credits/rateLimits.ts`) |
+
+---
+
+### 5b. Scene-by-Scene Analysis
+
+Async pipeline for long scripts: parse every scene, batch for Gemini (≤ 20 batches), aggregate into a scene report. User stays on the page and polls job progress.
+
+| Feature | Detail |
+|---|---|
+| Loading UX | Progress bar + phase message (`parsing` → `batching` → `analyzing` → `aggregating`) |
+| Report UI | `SceneBySceneDashboard` (`components/analyse/SceneBySceneSection.tsx`) |
+| Strongest / weakest | Top/bottom 5 scenes by **composite score** |
+| Emotional curve | Line chart: scene number vs **emotion intensity** (0–10), not labeled emotion types |
+| Scene table | Per scene: pages, dialogue %, emotion, pacing, conflict, dialogue quality, expandable details |
+| Scene details | Two-column expand: rewrite suggestions + **per-scene 27-emotion spectrum** bar chart (`emotion_spectrum`) |
+| Emotion spectrum | AI ranks the 8 strongest emotions present in each scene (0–100%); shared 27-emotion palette in `lib/emotions.ts` |
+| PDF export | **Download PDF** button → `lib/exportSceneAnalysePDF.ts` (text report: scores, top emotions, suggestions) |
+| Credit refund | Failed scene jobs auto-refund 15 credits exactly once (`lib/credits/refundSceneJob.ts`, migration `010`) |
+| Merged scenes | Scripts with > 20 logical batches merge adjacent low-impact scenes (never sampled/skipped) |
+
+#### Scene score columns (0–10, AI-generated per scene)
+
+| Column | Meaning |
+|---|---|
+| **Emotion** | Overall emotional impact / intensity of the scene (not a specific feeling label) |
+| **Pacing** | Rhythm and flow — rushed vs draggy vs well-timed |
+| **Conflict** | Tension, stakes, opposition in the scene |
+| **Dialogue** | Quality of written dialogue (voice, subtext, clarity) — not the same as **Dialogue %** |
+| **Dialogue %** | Local metric: share of scene text that is spoken lines |
+| **Composite** | Weighted blend: 30% emotion + 25% pacing + 25% conflict + 20% dialogue |
+
+**Pacing consistency** (header stat) measures how even pacing scores are across the whole script (high = steady rhythm).
+
+#### Scene API integration
+
+| Step | Detail |
+|---|---|
+| 1. Create job | `lib/scene-analyse-api.ts` → `POST /api/analyse/scenes/jobs` (multipart file) |
+| 2. Credit gate | `withSceneAnalysis` — subscription, monthly quota, daily limit, deduct 15 credits |
+| 3. DB row | Supabase `analysis_jobs` (migration `009_scene_analysis_jobs.sql`) via admin client |
+| 4. Trigger worker | Next.js forwards file + `job_id` to HF with `X-Job-Secret` header |
+| 5. Poll | `GET /api/analyse/scenes/jobs/[id]` every ~2.5s (RLS: owner read only); refunds credits if `status === failed` |
+| 6. Worker | `POST /api/v1/scripts/analyse/scenes/process` → background `run_scene_analysis_job` |
+| 7. Result | Worker writes `result` JSONB on job row; UI renders when `status === completed` |
+
+#### Backend modules (HF Space `scriptmind-backend`)
+
+| Module | Role |
+|---|---|
+| `scene_parser_service.py` | Split on INT./EXT./etc. scene headings |
+| `scene_metrics_service.py` | Local stats: length, dialogue %, merge score, location |
+| `scene_batch_service.py` | Greedy batches ≤ 8.5k chars; merge to ≤ 20 batches |
+| `scene_gemini_service.py` | Per-batch compact JSON scores + rewrite suggestions + per-scene `emotion_spectrum` |
+| `scene_aggregate_service.py` | Build final report, curve, strongest/weakest; sanitize 27-emotion spectrum |
+| `scene_job_service.py` | Job orchestration + Supabase progress updates |
+| `job_store.py` | Supabase REST updates via service role |
+
+#### Scene limits & quotas
+
+| Limit | Value |
+|---|---|
+| Credits per run | 15 |
+| Free plan | 0 scene analyses / month (blocked) |
+| Basic plan | 5 / month (UTC, completed jobs only) |
+| Pro plan | 25 / month |
+| Enterprise | Unlimited (`null` in `sceneMonthlyLimits.ts`) |
+| Daily rate limit | 3 scene jobs / day |
+
+Config: `lib/credits/sceneMonthlyLimits.ts`, `checkSceneMonthlyQuota.ts`, `withSceneAnalysis.ts`.
+
+#### Environment (Scene-by-Scene)
+
+| Variable | Where | Purpose |
+|---|---|---|
+| `SCENE_JOB_PROCESS_SECRET` | Cloudflare Worker + HF Space | Authenticates worker trigger |
+| `SUPABASE_SERVICE_ROLE_KEY` | Cloudflare + HF Space | Job insert (API) / progress updates (worker) |
+| `NEXT_PUBLIC_ANALYSE_API_URL` | Cloudflare | HF Space base URL |
+| `GEMINI_API_KEY` | HF Space | Batch Gemini calls |
+
+---
+
+### Known gaps (Analyse)
+
+- Quick and Scene reports are separate phases — no combined “Overview + Scenes” tab yet.
+- No “resume polling” if user closes tab mid-job (job may still complete in DB); refund still fires on the next poll/visit.
+- Scene emotional curve (header chart) is intensity only; the labeled 27-emotion breakdown is now per-scene (expand a row) and script-wide (Quick).
 
 ---
 
@@ -358,13 +466,26 @@ The most feature-rich page in the dashboard — a full film P&L, break-even, NPV
 | `lib/utils.ts` | `cn()` (class merge), `formatDate()`, misc helpers |
 | `lib/types.ts` | Shared TypeScript types: `Project`, `User`, `Script`, `AnalyseScriptReport` |
 | `lib/api.ts` | `ApiClient` class; most methods are mocked (generateDialogue, searchScripts, etc.) |
-| `lib/analyse-api.ts` | Real HTTP client for the script analysis backend |
-| `lib/gemini-api.ts` | Server-side Gemini client; `generateStoryOutline` and `generateDialogue` with typed responses and validation |
+| `lib/analyse-api.ts` | Quick analyse client → `POST /api/analyse` |
+| `lib/scene-analyse-api.ts` | Scene job create + poll helpers |
+| `lib/mock/scene-analyse.ts` | `SceneAnalysisReport`, `SceneRow`, job types |
+| `lib/credits/costs.ts` | Server credit costs (Quick 3, Scene 15) |
+| `lib/credits/withCredits.ts` | Credit gate wrapper for Quick analyse |
+| `lib/credits/withSceneAnalysis.ts` | Credit + monthly quota gate for Scene jobs |
+| `lib/credits/sceneMonthlyLimits.ts` | Plan monthly caps for scene analysis |
+| `lib/credits/checkSceneMonthlyQuota.ts` | Count completed jobs in UTC month |
+| `lib/draft/useFeatureDraft.ts` | Device-only draft save (used on `/analyse`) |
+| `lib/gemini-api.ts` | Server-side Gemini client; story & dialogue |
 | `lib/financial-store.ts` | Zustand store for all financial model state |
 | `lib/financial/projection.ts` | Revenue and cost projection calculations |
 | `lib/financial/insights.ts` | Rule-based financial insight generation |
 | `lib/financial/film-dataset.ts` | Reference dataset for film financial benchmarks |
-| `lib/exportAnalysePDF.ts` | jsPDF + html2canvas PDF export for analysis report |
+| `lib/exportAnalysePDF.ts` | jsPDF + html2canvas PDF export (Quick report) |
+| `lib/exportSceneAnalysePDF.ts` | jsPDF text PDF export (Scene-by-Scene report) |
+| `lib/emotions.ts` | Shared 27-emotion palette (labels + colors) for distribution & per-scene charts |
+| `lib/credits/refundSceneJob.ts` | Idempotent 15-credit refund for failed scene jobs |
+| `supabase/migrations/009_scene_analysis_jobs.sql` | `analysis_jobs` table + RLS for Scene-by-Scene |
+| `supabase/migrations/010_analysis_jobs_refund.sql` | Adds `refunded` flag for one-time scene-job refunds |
 
 ### UI Components (`components/ui/`)
 
@@ -378,11 +499,14 @@ The most feature-rich page in the dashboard — a full film P&L, break-even, NPV
 |---|---|---|---|
 | My Projects | `/projects` | None (Zustand/localStorage) | ✅ Functional |
 | Project Detail | `/projects/[id]` | None (Zustand/localStorage) | ✅ Functional |
-| Analyse Script | `/analyse` | Real API (`/api/v1/scripts/analyse`) | ✅ Functional (requires local backend) |
+| Analyse — Quick | `/analyse` | Next `/api/analyse` → HF `/api/v1/scripts/analyse` · 3 credits | ✅ Production (HF Space) |
+| Analyse — Scene-by-Scene | `/analyse` | Next job API → Supabase `analysis_jobs` → HF worker · 15 credits · per-scene 27-emotion spectrum · PDF · auto-refund on failure | ✅ Production (requires migrations 009 + 010 + HF secrets) |
 | Finance Studio | `/financial` | Stub save/load only | ✅ UI Functional (no persistence) |
 | Create Story | `/create-story` | Gemini API (`/api/story`) | ✅ Functional |
 | AI Dialogue | `/dialogue` | Gemini API (`/api/dialogue`) | ✅ Functional |
-| Download Scripts | `/download-scripts` | None (static data) | 🚧 Mock / Placeholder |
+| Visualize Scene | `/visualize` | HF Stable Diffusion (`/api/visualize`) | ✅ Functional |
+| Poster Generator | `/poster` | Gemini + Supabase storage (`/api/poster/*`) | ✅ Functional |
+| Usage Dashboard | `/download-scripts` | None (static data) | 🚧 Mock / Placeholder |
 | Settings | `/settings` | None (local state) | 🚧 Partial (UI only) |
 | Tutorial & Help | `/tutorial` | None (static) | 🚧 Static Content |
 
