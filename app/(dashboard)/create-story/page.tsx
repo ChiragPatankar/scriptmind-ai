@@ -25,6 +25,8 @@ import {
     MapPin,
     PenTool,
     RefreshCw,
+    Search,
+    Smile,
     Sparkles,
     Target,
     Users,
@@ -50,15 +52,43 @@ const GENRES = [
   { label: "Supernatural",     emoji: "🌑" },
 ];
 
+// Fixed, controlled selections — multi-select chips (see toggle helper below).
+const THEME_OPTIONS = [
+  "Love", "Family", "Friendship", "Identity", "Redemption", "Hope", "Sacrifice",
+  "Revenge", "Justice", "Survival", "Freedom", "Ambition", "Individual vs Society",
+  "Meaning of Success", "Destiny vs Choice",
+];
+
 const TONES = [
-  { label: "Intense",        color: "red"    },
-  { label: "Light-Hearted",  color: "yellow" },
-  { label: "Dark",           color: "gray"   },
-  { label: "Inspiring",      color: "blue"   },
-  { label: "Bittersweet",    color: "purple" },
-  { label: "Epic",           color: "orange" },
-  { label: "Quirky",         color: "green"  },
-  { label: "Satirical",      color: "pink"   },
+  "Dramatic", "Emotional", "Intense", "Bittersweet", "Realistic", "Philosophical",
+  "Inspiring", "Hopeful", "Dark", "Suspenseful", "Romantic", "Light-Hearted",
+  "Comedic", "Epic", "Satirical",
+];
+
+const AUDIENCE_OPTIONS = [
+  "Kids", "Teens", "Young Adults", "Adults", "Family Audience", "Mass Audience",
+  "Urban Audience", "Rural Audience", "OTT Audience", "Festival Audience", "Global Audience",
+];
+
+// One-click storytelling presets → auto-populate themes, tones & audience.
+interface StoryPreset {
+  name: string;
+  themes: string[];
+  tones: string[];
+  audience: string[];
+}
+const STORY_PRESETS: StoryPreset[] = [
+  { name: "Commercial Bollywood", themes: ["Love", "Family", "Redemption"],                     tones: ["Dramatic", "Emotional", "Romantic"],   audience: ["Mass Audience", "Family Audience"] },
+  { name: "Dark Thriller",        themes: ["Revenge", "Justice", "Survival"],                    tones: ["Dark", "Suspenseful", "Intense"],      audience: ["Adults", "OTT Audience"] },
+  { name: "Festival Film",        themes: ["Identity", "Meaning of Success", "Destiny vs Choice"], tones: ["Philosophical", "Realistic", "Bittersweet"], audience: ["Festival Audience", "Global Audience"] },
+  { name: "Inspirational Drama",  themes: ["Hope", "Freedom", "Ambition"],                       tones: ["Inspiring", "Hopeful", "Emotional"],   audience: ["Young Adults", "Adults"] },
+  { name: "Epic Adventure",       themes: ["Survival", "Destiny vs Choice", "Freedom"],          tones: ["Epic", "Dramatic", "Hopeful"],         audience: ["Teens", "Young Adults", "Global Audience"] },
+];
+
+const MOODS = [
+  "Emotional", "Intense", "Hopeful", "Reflective", "Conflicted", "Determined",
+  "Angry", "Tense", "Romantic", "Bittersweet", "Nostalgic", "Frustrated",
+  "Dramatic", "Philosophical",
 ];
 
 const SETTINGS = [
@@ -72,8 +102,6 @@ const SETTINGS = [
   { label: "Multiple Locations", emoji: "🗺️" },
 ];
 
-const AUDIENCES = ["Mass", "Multiplex", "OTT / Streaming", "Family", "Youth", "International"];
-const THEMES    = ["Revenge", "Redemption", "Love & Sacrifice", "Identity", "Power & Corruption", "Survival", "Coming of Age", "Class Struggle", "Loyalty vs Truth"];
 const RUNTIMES  = [
   { id: "short",    label: "Short Film", desc: "< 40 min"    },
   { id: "feature",  label: "Feature",    desc: "90–120 min"  },
@@ -84,16 +112,10 @@ type RuntimeType = "short" | "feature" | "series";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const TONE_CLASSES: Record<string, { active: string; hover: string }> = {
-  red:    { active: "bg-red-500/20 border-red-500/40 text-red-400",       hover: "hover:border-red-500/20"    },
-  yellow: { active: "bg-yellow-500/20 border-yellow-500/40 text-yellow-400", hover: "hover:border-yellow-500/20" },
-  gray:   { active: "bg-zinc-500/20 border-zinc-500/40 text-zinc-400",     hover: "hover:border-zinc-500/20"   },
-  blue:   { active: "bg-blue-500/20 border-blue-500/40 text-blue-400",     hover: "hover:border-blue-500/20"   },
-  purple: { active: "bg-purple-500/20 border-purple-500/40 text-purple-400",hover: "hover:border-purple-500/20" },
-  orange: { active: "bg-orange-500/20 border-orange-500/40 text-orange-400",hover: "hover:border-orange-500/20" },
-  green:  { active: "bg-emerald-500/20 border-emerald-500/40 text-emerald-400",hover:"hover:border-emerald-500/20"},
-  pink:   { active: "bg-pink-500/20 border-pink-500/40 text-pink-400",     hover: "hover:border-pink-500/20"   },
-};
+/** Toggle a value in/out of a string-array selection (multi-select). */
+function toggleSelection(list: string[], value: string): string[] {
+  return list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
+}
 
 function SectionBox({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
   return (
@@ -104,6 +126,77 @@ function SectionBox({ icon, title, children }: { icon: React.ReactNode; title: s
       </div>
       <div className="p-4">{children}</div>
     </div>
+  );
+}
+
+// ── Reusable searchable multi-select chip group ────────────────────────────────
+
+interface ChipMultiSelectProps {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
+  options: string[];
+  selected: string[];
+  onChange: (next: string[]) => void;
+  activeClass: string;
+  hoverClass: string;
+}
+
+function ChipMultiSelect({
+  icon, title, hint, options, selected, onChange, activeClass, hoverClass,
+}: ChipMultiSelectProps) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+  const toggle = (v: string) => onChange(toggleSelection(selected, v));
+
+  return (
+    <SectionBox icon={icon} title={title}>
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-[11px] text-text-muted">Select one or more — optional</p>
+          {selected.length > 0 && (
+            <button type="button" onClick={() => onChange([])}
+              className="text-[11px] text-text-muted hover:text-text-primary transition-colors">
+              Clear ({selected.length})
+            </button>
+          )}
+        </div>
+
+        <Input
+          variant="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={hint}
+          leftIcon={<Search className="w-4 h-4" />}
+        />
+
+        <div className="flex flex-wrap gap-2 max-h-44 overflow-y-auto pr-1 scroll-smooth">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-text-muted py-1.5">No matches for &ldquo;{query}&rdquo;.</p>
+          ) : (
+            filtered.map((o) => {
+              const active = selected.includes(o);
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggle(o)}
+                  className={cn(
+                    "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                    active ? activeClass : `bg-surface-2 border-border text-text-muted ${hoverClass} hover:text-text-secondary`
+                  )}
+                >
+                  {o}
+                  {active && <X className="w-3 h-3" />}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
+    </SectionBox>
   );
 }
 
@@ -167,12 +260,13 @@ function SceneBlock({ scene, index }: { scene: import("@/lib/gemini-api").Script
 export default function CreateStoryPage() {
   const [title,     setTitle]     = useState("");
   const [premise,   setPremise]   = useState("");
-  const [genre,     setGenre]     = useState("Romantic Drama");
-  const [tone,      setTone]      = useState("Intense");
-  const [setting,   setSetting]   = useState("Mumbai");
-  const [audience,  setAudience]  = useState("Multiplex");
-  const [theme,     setTheme]     = useState("Love & Sacrifice");
-  const [runtime,   setRuntime]   = useState<RuntimeType>("feature");
+  const [genre,          setGenre]          = useState("Romantic Drama");
+  const [themes,         setThemes]         = useState<string[]>([]);
+  const [tones,          setTones]          = useState<string[]>([]);
+  const [moods,          setMoods]          = useState<string[]>([]);
+  const [targetAudience, setTargetAudience] = useState<string[]>([]);
+  const [setting,        setSetting]        = useState("Mumbai");
+  const [runtime,        setRuntime]        = useState<RuntimeType>("feature");
 
   const [isGenerating,  setIsGenerating]  = useState(false);
   const [storyOutline,  setStoryOutline]  = useState<StoryOutline | null>(null);
@@ -188,7 +282,7 @@ export default function CreateStoryPage() {
 
   // ── Draft persistence ────────────────────────────────────────────────────
   const draftSnapshot = {
-    title, premise, genre, tone, setting, audience, theme, runtime,
+    title, premise, genre, themes, tones, moods, targetAudience, setting, runtime,
     storyOutline, fullScript,
   };
   const {
@@ -200,10 +294,31 @@ export default function CreateStoryPage() {
     if (typeof loadedDraft.title    === "string") setTitle(loadedDraft.title);
     if (typeof loadedDraft.premise  === "string") setPremise(loadedDraft.premise);
     if (typeof loadedDraft.genre    === "string") setGenre(loadedDraft.genre);
-    if (typeof loadedDraft.tone     === "string") setTone(loadedDraft.tone);
+    if (Array.isArray(loadedDraft.themes)) {
+      setThemes(loadedDraft.themes.filter((t): t is string => typeof t === "string"));
+    } else {
+      // Migrate legacy single-theme drafts saved before multi-select.
+      const legacyTheme = (loadedDraft as { theme?: unknown }).theme;
+      if (typeof legacyTheme === "string" && legacyTheme) setThemes([legacyTheme]);
+    }
+    if (Array.isArray(loadedDraft.tones)) {
+      setTones(loadedDraft.tones.filter((t): t is string => typeof t === "string"));
+    } else {
+      // Migrate legacy single-tone drafts saved before multi-select.
+      const legacyTone = (loadedDraft as { tone?: unknown }).tone;
+      if (typeof legacyTone === "string" && legacyTone) setTones([legacyTone]);
+    }
+    if (Array.isArray(loadedDraft.moods)) {
+      setMoods(loadedDraft.moods.filter((m): m is string => typeof m === "string"));
+    }
+    if (Array.isArray(loadedDraft.targetAudience)) {
+      setTargetAudience(loadedDraft.targetAudience.filter((a): a is string => typeof a === "string"));
+    } else {
+      // Migrate legacy single-audience drafts saved before multi-select.
+      const legacyAudience = (loadedDraft as { audience?: unknown }).audience;
+      if (typeof legacyAudience === "string" && legacyAudience) setTargetAudience([legacyAudience]);
+    }
     if (typeof loadedDraft.setting  === "string") setSetting(loadedDraft.setting);
-    if (typeof loadedDraft.audience === "string") setAudience(loadedDraft.audience);
-    if (typeof loadedDraft.theme    === "string") setTheme(loadedDraft.theme);
     if (loadedDraft.runtime === "short" || loadedDraft.runtime === "feature" || loadedDraft.runtime === "series")
       setRuntime(loadedDraft.runtime);
     if (loadedDraft.storyOutline)   setStoryOutline(loadedDraft.storyOutline);
@@ -219,7 +334,7 @@ export default function CreateStoryPage() {
       const res = await fetch("/api/story", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, premise, genre, tone, setting }),
+        body: JSON.stringify({ title, premise, genre, themes, tones, moods, targetAudience, setting }),
       });
       const data = await res.json() as StoryOutline & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
@@ -254,7 +369,7 @@ export default function CreateStoryPage() {
     if (!storyOutline) return;
     const lines = [
       `TITLE: ${storyOutline.title}`,
-      `GENRE: ${genre}  |  TONE: ${tone}  |  SETTING: ${setting}`,
+      `GENRE: ${genre}  |  THEMES: ${themes.join(", ") || "—"}  |  TONE: ${tones.join(", ") || "—"}  |  MOOD: ${moods.join(", ") || "—"}  |  AUDIENCE: ${targetAudience.join(", ") || "—"}  |  SETTING: ${setting}`,
       `LOGLINE: ${storyOutline.logline}`,
       "\n" + "─".repeat(60),
       ...storyOutline.acts.flatMap((act) => [
@@ -284,7 +399,7 @@ export default function CreateStoryPage() {
       const res = await fetch("/api/story/expand", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ outline: storyOutline, genre, tone, setting, language: "Hinglish" }),
+        body: JSON.stringify({ outline: storyOutline, genre, themes, tones, moods, targetAudience, setting, language: "Hinglish" }),
       });
       const data = await res.json() as FullScript & { error?: string };
       if (!res.ok) throw new Error(data.error ?? `Request failed (${res.status})`);
@@ -330,7 +445,20 @@ export default function CreateStoryPage() {
     URL.revokeObjectURL(url);
   };
 
-  const selectedToneColor = TONES.find((t) => t.label === tone)?.color ?? "blue";
+  // ── Storytelling preset helpers ────────────────────────────────────────────
+  const sameSet = (a: string[], b: string[]) =>
+    a.length === b.length && a.every((x) => b.includes(x));
+
+  const applyPreset = (preset: StoryPreset) => {
+    setThemes(preset.themes);
+    setTones(preset.tones);
+    setTargetAudience(preset.audience);
+  };
+
+  const isPresetActive = (preset: StoryPreset) =>
+    sameSet(preset.themes, themes) &&
+    sameSet(preset.tones, tones) &&
+    sameSet(preset.audience, targetAudience);
 
   return (
     <div>
@@ -491,20 +619,88 @@ export default function CreateStoryPage() {
             </div>
           </SectionBox>
 
-          {/* Tone */}
-          <SectionBox icon={<Layers className="w-4 h-4 text-accent" />} title="Tone">
-            <div className="flex flex-wrap gap-2">
-              {TONES.map(({ label, color }) => {
-                const cls = TONE_CLASSES[color]!;
+          {/* Quick storytelling presets — auto-populate themes, tones & audience */}
+          <SectionBox icon={<Wand2 className="w-4 h-4 text-gold" />} title="Quick Presets">
+            <div className="flex flex-nowrap sm:flex-wrap gap-2 overflow-x-auto sm:overflow-visible -mx-1 px-1 pb-1 scroll-smooth">
+              {STORY_PRESETS.map((preset) => {
+                const active = isPresetActive(preset);
                 return (
-                  <button key={label} type="button" onClick={() => setTone(label)}
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => applyPreset(preset)}
+                    title={`Themes: ${preset.themes.join(", ")}\nTones: ${preset.tones.join(", ")}\nAudience: ${preset.audience.join(", ")}`}
                     className={cn(
-                      "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                      tone === label
-                        ? cls.active
-                        : `bg-surface-2 border-border text-text-muted ${cls.hover}`
+                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border whitespace-nowrap transition-all flex-shrink-0",
+                      active
+                        ? "bg-gold/20 border-gold/40 text-gold"
+                        : "bg-surface-2 border-border text-text-muted hover:border-gold/30 hover:text-text-secondary"
                     )}
-                  >{label}</button>
+                  >
+                    <Sparkles className="w-3 h-3" /> {preset.name}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-[11px] text-text-muted mt-3">
+              Tap a preset to auto-fill Themes, Tones &amp; Target Audience — then fine-tune below.
+            </p>
+          </SectionBox>
+
+          {/* Themes (multi-select, searchable) */}
+          <ChipMultiSelect
+            icon={<Target className="w-4 h-4 text-emerald-400" />}
+            title="Themes"
+            hint="Search themes…"
+            options={THEME_OPTIONS}
+            selected={themes}
+            onChange={setThemes}
+            activeClass="bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+            hoverClass="hover:border-emerald-500/20"
+          />
+
+          {/* Tone (multi-select, searchable) */}
+          <ChipMultiSelect
+            icon={<Layers className="w-4 h-4 text-accent" />}
+            title="Tone"
+            hint="Search tones…"
+            options={TONES}
+            selected={tones}
+            onChange={setTones}
+            activeClass="bg-accent/20 border-accent/40 text-accent"
+            hoverClass="hover:border-accent/20"
+          />
+
+          {/* Mood (multi-select) */}
+          <SectionBox icon={<Smile className="w-4 h-4 text-violet-400" />} title="Mood">
+            <div className="flex items-center justify-between mb-2.5">
+              <p className="text-[11px] text-text-muted">Select one or more — optional</p>
+              {moods.length > 0 && (
+                <button type="button" onClick={() => setMoods([])}
+                  className="text-[11px] text-text-muted hover:text-text-primary transition-colors">
+                  Clear ({moods.length})
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {MOODS.map((label) => {
+                const active = moods.includes(label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => setMoods((prev) => toggleSelection(prev, label))}
+                    className={cn(
+                      "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                      active
+                        ? "bg-violet-500/20 border-violet-500/40 text-violet-400"
+                        : "bg-surface-2 border-border text-text-muted hover:border-violet-500/20 hover:text-text-secondary"
+                    )}
+                  >
+                    {active && <CheckCircle2 className="w-3 h-3" />}
+                    {label}
+                  </button>
                 );
               })}
             </div>
@@ -528,62 +724,34 @@ export default function CreateStoryPage() {
             </div>
           </SectionBox>
 
-          {/* Advanced */}
-          <SectionBox icon={<Target className="w-4 h-4 text-pink-400" />} title="Advanced Parameters">
-            <div className="space-y-4">
+          {/* Target Audience (multi-select, searchable) */}
+          <ChipMultiSelect
+            icon={<Users className="w-4 h-4 text-pink-400" />}
+            title="Target Audience"
+            hint="Search audiences…"
+            options={AUDIENCE_OPTIONS}
+            selected={targetAudience}
+            onChange={setTargetAudience}
+            activeClass="bg-pink-500/20 border-pink-500/40 text-pink-400"
+            hoverClass="hover:border-pink-500/20"
+          />
 
-              <div>
-                <p className="text-xs text-text-muted font-medium mb-2">Target Audience</p>
-                <div className="flex flex-wrap gap-2">
-                  {AUDIENCES.map((a) => (
-                    <button key={a} type="button" onClick={() => setAudience(a)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                        audience === a
-                          ? "bg-pink-500/20 border-pink-500/40 text-pink-400"
-                          : "bg-surface-2 border-border text-text-muted hover:border-pink-500/20"
-                      )}
-                    >{a}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-text-muted font-medium mb-2">Core Theme</p>
-                <div className="flex flex-wrap gap-2">
-                  {THEMES.map((t) => (
-                    <button key={t} type="button" onClick={() => setTheme(t)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                        theme === t
-                          ? "bg-violet-500/20 border-violet-500/40 text-violet-400"
-                          : "bg-surface-2 border-border text-text-muted hover:border-violet-500/20"
-                      )}
-                    >{t}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-text-muted font-medium mb-2">
-                  <Clock className="w-3 h-3 inline mr-1" />Runtime / Format
-                </p>
-                <div className="grid grid-cols-3 gap-2">
-                  {RUNTIMES.map((r) => (
-                    <button key={r.id} type="button" onClick={() => setRuntime(r.id as RuntimeType)}
-                      className={cn(
-                        "flex flex-col items-center py-2.5 px-2 rounded-xl border text-xs font-medium transition-all",
-                        runtime === r.id
-                          ? "border-accent/50 bg-accent/10 text-accent"
-                          : "border-border bg-surface-2 text-text-muted hover:border-accent/20"
-                      )}
-                    >
-                      <span className="font-bold">{r.label}</span>
-                      <span className="text-[10px] opacity-60 mt-0.5">{r.desc}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {/* Runtime / Format */}
+          <SectionBox icon={<Clock className="w-4 h-4 text-pink-400" />} title="Runtime / Format">
+            <div className="grid grid-cols-3 gap-2">
+              {RUNTIMES.map((r) => (
+                <button key={r.id} type="button" onClick={() => setRuntime(r.id as RuntimeType)}
+                  className={cn(
+                    "flex flex-col items-center py-2.5 px-2 rounded-xl border text-xs font-medium transition-all",
+                    runtime === r.id
+                      ? "border-accent/50 bg-accent/10 text-accent"
+                      : "border-border bg-surface-2 text-text-muted hover:border-accent/20"
+                  )}
+                >
+                  <span className="font-bold">{r.label}</span>
+                  <span className="text-[10px] opacity-60 mt-0.5">{r.desc}</span>
+                </button>
+              ))}
             </div>
           </SectionBox>
 
@@ -673,8 +841,11 @@ export default function CreateStoryPage() {
                     {/* Current selection preview */}
                     <div className="flex flex-wrap justify-center gap-2">
                       <Badge variant="warning">{genre}</Badge>
-                      <Badge variant="default">{tone}</Badge>
-                      <Badge variant="secondary">{setting}</Badge>
+                      {themes.map((t) => <Badge key={`theme-${t}`} variant="success">{t}</Badge>)}
+                      {tones.map((t) => <Badge key={`tone-${t}`} variant="default">{t}</Badge>)}
+                      {moods.map((m) => <Badge key={`mood-${m}`} variant="secondary">{m}</Badge>)}
+                      {targetAudience.map((a) => <Badge key={`aud-${a}`} variant="outline">{a}</Badge>)}
+                      <Badge variant="outline">{setting}</Badge>
                     </div>
                   </motion.div>
 
@@ -687,10 +858,10 @@ export default function CreateStoryPage() {
                         <h2 className="text-2xl font-black text-text-primary leading-tight">{storyOutline.title}</h2>
                         <div className="flex flex-wrap gap-1.5 mt-1">
                           <Badge variant="warning">{genre}</Badge>
-                          <Badge variant="default"
-                            className={cn(TONE_CLASSES[selectedToneColor]?.active.replace("border-", "border ") ?? "")}>
-                            {tone}
-                          </Badge>
+                          {themes.map((t) => <Badge key={`theme-${t}`} variant="success">{t}</Badge>)}
+                          {tones.map((t) => <Badge key={`tone-${t}`} variant="default">{t}</Badge>)}
+                          {moods.map((m) => <Badge key={`mood-${m}`} variant="secondary">{m}</Badge>)}
+                          {targetAudience.map((a) => <Badge key={`aud-${a}`} variant="outline">{a}</Badge>)}
                           <Badge variant="outline">{setting}</Badge>
                         </div>
                       </div>

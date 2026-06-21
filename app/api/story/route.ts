@@ -6,19 +6,22 @@ export const POST = withCredits("story_generation", async (req: NextRequest) => 
   try {
     const body = (await req.json()) as Partial<StoryInput>;
 
-    if (!body.genre || !body.tone || !body.setting) {
+    if (!body.genre || !body.setting) {
       return NextResponse.json(
-        { error: "genre, tone, and setting are required." },
+        { error: "genre and setting are required." },
         { status: 400 }
       );
     }
 
     const outline = await generateStoryOutline({
-      title:   body.title   ?? "",
-      premise: body.premise ?? "",
-      genre:   body.genre,
-      tone:    body.tone,
-      setting: body.setting,
+      title:          body.title   ?? "",
+      premise:        body.premise ?? "",
+      genre:          body.genre,
+      themes:         Array.isArray(body.themes) ? body.themes : [],
+      tones:          Array.isArray(body.tones) ? body.tones : [],
+      moods:          Array.isArray(body.moods) ? body.moods : [],
+      targetAudience: Array.isArray(body.targetAudience) ? body.targetAudience : [],
+      setting:        body.setting,
     });
 
     return NextResponse.json(outline);

@@ -7,7 +7,10 @@ export const POST = withCredits("script_expand", async (req: NextRequest) => {
     const body = await req.json() as {
       outline?: StoryOutline;
       genre?: string;
-      tone?: string;
+      themes?: string[];
+      tones?: string[];
+      moods?: string[];
+      targetAudience?: string[];
       setting?: string;
       language?: string;
     };
@@ -20,10 +23,13 @@ export const POST = withCredits("script_expand", async (req: NextRequest) => {
     }
 
     const script = await expandToFullScript(body.outline, {
-      genre:    body.genre    ?? "Drama",
-      tone:     body.tone     ?? "Intense",
-      setting:  body.setting  ?? "India",
-      language: body.language ?? "Hinglish",
+      genre:          body.genre    ?? "Drama",
+      themes:         Array.isArray(body.themes) ? body.themes : [],
+      tones:          Array.isArray(body.tones) ? body.tones : [],
+      moods:          Array.isArray(body.moods) ? body.moods : [],
+      targetAudience: Array.isArray(body.targetAudience) ? body.targetAudience : [],
+      setting:        body.setting  ?? "India",
+      language:       body.language ?? "Hinglish",
     });
 
     return NextResponse.json(script);

@@ -17,37 +17,56 @@ import {
     Copy, Download,
     Film,
     Heart,
+    Languages,
     MessageSquare,
     Mic2,
     Pencil,
+    PenTool,
     Plus,
     RefreshCw,
+    Search,
+    Smile,
     Sparkles,
     User,
     Users,
+    Wand2,
     X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
+// Fixed, controlled selections — Mood is multi-select; Writing Style & Language are single.
 const MOOD_OPTIONS = [
-  { label: "Intense",       emoji: "🔥" },
-  { label: "Romantic",      emoji: "💕" },
-  { label: "Comedic",       emoji: "😄" },
-  { label: "Emotional",     emoji: "😢" },
-  { label: "Dramatic",      emoji: "🎭" },
-  { label: "Philosophical", emoji: "🤔" },
-  { label: "Angry",         emoji: "😤" },
-  { label: "Nostalgic",     emoji: "🌅" },
-  { label: "Tense",         emoji: "😰" },
-  { label: "Bittersweet",   emoji: "🌧️" },
+  "Emotional", "Dramatic", "Intense", "Tense", "Romantic", "Comedic",
+  "Philosophical", "Angry", "Hopeful", "Reflective", "Conflicted", "Determined",
+  "Frustrated", "Nostalgic", "Bittersweet", "Suspenseful",
 ];
 
-const LANGUAGE_OPTIONS = ["Hindi", "English", "Hinglish", "Tamil", "Telugu"] as const;
-type Language = typeof LANGUAGE_OPTIONS[number];
+const STYLE_OPTIONS = [
+  "Cinematic", "Natural", "Modern", "Realistic", "Commercial",
+  "Classical", "Poetic", "Action-Packed", "Satirical",
+];
 
-const STYLE_OPTIONS = ["Classical", "Modern", "Street Slang", "Poetic", "Action-Packed", "Realistic", "Satirical"];
+const LANGUAGE_OPTIONS = [
+  "Hindi", "English", "Hinglish", "Tamil", "Telugu", "Marathi",
+  "Bengali", "Kannada", "Malayalam", "Punjabi", "Gujarati", "Urdu",
+];
+
+// One-click presets → auto-populate moods, writing style & language.
+interface Preset {
+  name: string;
+  moods: string[];
+  writingStyle: string;
+  language: string;
+}
+const PRESETS: Preset[] = [
+  { name: "OTT Drama",            moods: ["Emotional", "Reflective", "Bittersweet"],   writingStyle: "Natural",        language: "Hindi" },
+  { name: "Bollywood Commercial", moods: ["Dramatic", "Romantic", "Emotional"],        writingStyle: "Commercial",     language: "Hindi" },
+  { name: "Dark Thriller",        moods: ["Suspenseful", "Intense", "Tense"],          writingStyle: "Cinematic",      language: "English" },
+  { name: "Mass Action",          moods: ["Determined", "Intense", "Angry"],           writingStyle: "Action-Packed",  language: "Telugu" },
+  { name: "Festival Cinema",      moods: ["Philosophical", "Reflective", "Bittersweet"], writingStyle: "Poetic",       language: "Malayalam" },
+];
 
 const LENGTH_OPTIONS = [
   { id: "short",  label: "Short",  desc: "4–5 lines"  },
@@ -315,32 +334,77 @@ function CharCard({ profile, index, onEdit, onRemove }: CharCardProps) {
   );
 }
 
-// ── Pill selector ──────────────────────────────────────────────────────────────
+// ── Chip selector (searchable, multi or single select) ─────────────────────────
 
-function PillGroup<T extends string>({
-  options, value, onChange, accent = "accent",
-}: {
+interface ChipSelectorProps {
+  icon: React.ReactNode;
+  title: string;
+  hint: string;
   options: string[];
-  value: T;
-  onChange: (v: T) => void;
-  accent?: string;
-}) {
+  selected: string[];
+  onToggle: (value: string) => void;
+  onClear?: () => void;
+  activeClass: string;
+  hoverClass: string;
+}
+
+function ChipSelector({
+  icon, title, hint, options, selected, onToggle, onClear, activeClass, hoverClass,
+}: ChipSelectorProps) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  const filtered = q ? options.filter((o) => o.toLowerCase().includes(q)) : options;
+
   return (
-    <div className="flex flex-wrap gap-2">
-      {options.map((o) => (
-        <button
-          key={o} type="button"
-          onClick={() => onChange(o as T)}
-          className={cn(
-            "px-3 py-1.5 rounded-full text-xs font-medium transition-all duration-150",
-            value === o
-              ? accent === "secondary"
-                ? "bg-secondary/20 border border-secondary/40 text-secondary"
-                : "bg-accent text-white"
-              : "bg-surface-2 border border-border text-text-muted hover:border-accent/30 hover:text-text-secondary"
+    <div className="rounded-2xl border border-border bg-surface overflow-hidden">
+      <div className="flex items-center justify-between px-5 py-3.5 border-b border-border">
+        <div className="flex items-center gap-2 min-w-0">
+          {icon}
+          <h3 className="text-sm font-bold text-text-primary">{title}</h3>
+          {selected.length > 0 && (
+            <span className="text-xs text-text-muted">({selected.length})</span>
           )}
-        >{o}</button>
-      ))}
+        </div>
+        {onClear && selected.length > 0 && (
+          <button type="button" onClick={onClear}
+            className="text-[11px] text-text-muted hover:text-text-primary transition-colors">
+            Clear
+          </button>
+        )}
+      </div>
+      <div className="p-4 space-y-3">
+        <Input
+          variant="search"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={hint}
+          leftIcon={<Search className="w-4 h-4" />}
+        />
+        <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto pr-1 scroll-smooth">
+          {filtered.length === 0 ? (
+            <p className="text-xs text-text-muted py-1.5">No matches for &ldquo;{query}&rdquo;.</p>
+          ) : (
+            filtered.map((o) => {
+              const active = selected.includes(o);
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => onToggle(o)}
+                  className={cn(
+                    "flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                    active ? activeClass : `bg-surface-2 border-border text-text-muted ${hoverClass} hover:text-text-secondary`
+                  )}
+                >
+                  {active && <CheckCircle2 className="w-3 h-3" />}
+                  {o}
+                </button>
+              );
+            })
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -355,12 +419,12 @@ export default function DialoguePage() {
   const [modalOpen, setModalOpen]   = useState(false);
   const [editIdx,   setEditIdx]     = useState<number | null>(null);
 
-  const [scene,    setScene]    = useState("Two estranged lovers meet during a Mumbai monsoon night");
-  const [subtext,  setSubtext]  = useState("She is leaving the country tomorrow. He doesn't know.");
-  const [mood,     setMood]     = useState("Intense");
-  const [language, setLanguage] = useState<Language>("Hinglish");
-  const [style,    setStyle]    = useState("Modern");
-  const [length,   setLength]   = useState<"short"|"medium"|"long">("medium");
+  const [scene,        setScene]        = useState("Two estranged lovers meet during a Mumbai monsoon night");
+  const [subtext,      setSubtext]      = useState("She is leaving the country tomorrow. He doesn't know.");
+  const [moods,        setMoods]        = useState<string[]>(["Intense"]);
+  const [writingStyle, setWritingStyle] = useState("Modern");
+  const [language,     setLanguage]     = useState("Hinglish");
+  const [length,       setLength]       = useState<"short"|"medium"|"long">("medium");
 
   const [dialogue,   setDialogue]   = useState<GeneratedDialogueLine[]>([]);
   const [isLoading,  setIsLoading]  = useState(false);
@@ -369,7 +433,7 @@ export default function DialoguePage() {
 
   // ── Draft persistence ────────────────────────────────────────────────────
   const draftSnapshot = {
-    profiles, scene, subtext, mood, language, style, length, dialogue,
+    profiles, scene, subtext, moods, writingStyle, language, length, dialogue,
   };
   const {
     loadedDraft, isHydrated, status: saveStatus, isDirty, lastSavedAt, save,
@@ -381,13 +445,43 @@ export default function DialoguePage() {
     if (Array.isArray(loadedDraft.profiles))         setProfiles(loadedDraft.profiles);
     if (typeof loadedDraft.scene === "string")       setScene(loadedDraft.scene);
     if (typeof loadedDraft.subtext === "string")     setSubtext(loadedDraft.subtext);
-    if (typeof loadedDraft.mood === "string")        setMood(loadedDraft.mood);
-    if (typeof loadedDraft.language === "string")    setLanguage(loadedDraft.language as Language);
-    if (typeof loadedDraft.style === "string")       setStyle(loadedDraft.style);
+    if (Array.isArray(loadedDraft.moods)) {
+      setMoods(loadedDraft.moods.filter((m): m is string => typeof m === "string"));
+    } else {
+      // Migrate legacy single-mood drafts saved before multi-select.
+      const legacyMood = (loadedDraft as { mood?: unknown }).mood;
+      if (typeof legacyMood === "string" && legacyMood) setMoods([legacyMood]);
+    }
+    if (typeof loadedDraft.writingStyle === "string") {
+      setWritingStyle(loadedDraft.writingStyle);
+    } else {
+      const legacyStyle = (loadedDraft as { style?: unknown }).style;
+      if (typeof legacyStyle === "string" && legacyStyle) setWritingStyle(legacyStyle);
+    }
+    if (typeof loadedDraft.language === "string")    setLanguage(loadedDraft.language);
     if (loadedDraft.length === "short" || loadedDraft.length === "medium" || loadedDraft.length === "long") setLength(loadedDraft.length);
     if (Array.isArray(loadedDraft.dialogue))         setDialogue(loadedDraft.dialogue);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loadedDraft]);
+
+  // ── Mood / Style / Language selection helpers ──────────────────────────────
+  const toggleMood = (v: string) =>
+    setMoods((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+  const selectStyle = (v: string) =>
+    setWritingStyle((prev) => (prev === v ? "" : v));
+  // Language is required — always keep exactly one selected (no deselect).
+  const selectLanguage = (v: string) => setLanguage(v);
+
+  const applyPreset = (p: Preset) => {
+    setMoods(p.moods);
+    setWritingStyle(p.writingStyle);
+    setLanguage(p.language);
+  };
+
+  const isPresetActive = (p: Preset) =>
+    p.writingStyle === writingStyle &&
+    p.language === language &&
+    p.moods.length === moods.length && p.moods.every((m) => moods.includes(m));
 
   const openAddModal  = () => { setEditIdx(null); setModalOpen(true); };
   const openEditModal = (i: number) => { setEditIdx(i); setModalOpen(true); };
@@ -412,7 +506,7 @@ export default function DialoguePage() {
         body: JSON.stringify({
           characters:        profiles.map((p) => p.name),
           characterProfiles: profiles,
-          scene, mood, language, style, subtext, dialogueLength: length,
+          scene, moods, writingStyle, language, subtext, dialogueLength: length,
         }),
       });
       const data = await res.json() as GeneratedDialogueLine[] | { error?: string };
@@ -438,7 +532,7 @@ export default function DialoguePage() {
   };
 
   const exportDialogue = () => {
-    const header = `SCENE: ${scene}\nMOOD: ${mood}  |  LANGUAGE: ${language}  |  STYLE: ${style}${subtext ? `\nSUBTEXT: ${subtext}` : ""}\n${"─".repeat(60)}\n\n`;
+    const header = `SCENE: ${scene}\nMOOD: ${moods.join(", ") || "—"}  |  STYLE: ${writingStyle || "—"}  |  LANGUAGE: ${language || "—"}${subtext ? `\nSUBTEXT: ${subtext}` : ""}\n${"─".repeat(60)}\n\n`;
     const body = dialogue.map((line) => {
       const parts = [`${line.character}${line.emotion ? ` (${line.emotion})` : ""}`];
       if (line.direction) parts.push(`  ${line.direction}`);
@@ -549,58 +643,83 @@ export default function DialoguePage() {
             </div>
           </div>
 
-          {/* Mood */}
+          {/* Presets */}
           <div className="rounded-2xl border border-border bg-surface overflow-hidden">
-            <div className="px-5 py-3.5 border-b border-border">
-              <h3 className="text-sm font-bold text-text-primary">Mood</h3>
+            <div className="flex items-center gap-2 px-5 py-3.5 border-b border-border">
+              <Wand2 className="w-4 h-4 text-gold" />
+              <h3 className="text-sm font-bold text-text-primary">Recommended Presets</h3>
             </div>
             <div className="p-4">
               <div className="flex flex-wrap gap-2">
-                {MOOD_OPTIONS.map(({ label, emoji }) => (
-                  <button
-                    key={label} type="button"
-                    onClick={() => setMood(label)}
-                    className={cn(
-                      "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all",
-                      mood === label
-                        ? "bg-accent text-white"
-                        : "bg-surface-2 border border-border text-text-muted hover:border-accent/30 hover:text-text-secondary"
-                    )}
-                  >
-                    <span>{emoji}</span> {label}
-                  </button>
-                ))}
+                {PRESETS.map((p) => {
+                  const active = isPresetActive(p);
+                  return (
+                    <button
+                      key={p.name}
+                      type="button"
+                      onClick={() => applyPreset(p)}
+                      title={`Moods: ${p.moods.join(", ")} · Style: ${p.writingStyle} · Language: ${p.language}`}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border transition-all",
+                        active
+                          ? "bg-gold/20 border-gold/40 text-gold"
+                          : "bg-surface-2 border-border text-text-muted hover:border-gold/30 hover:text-text-secondary"
+                      )}
+                    >
+                      <Sparkles className="w-3 h-3" /> {p.name}
+                    </button>
+                  );
+                })}
               </div>
+              <p className="text-[11px] text-text-muted mt-3">
+                Tap a preset to auto-fill Mood, Writing Style &amp; Language — then fine-tune below.
+              </p>
             </div>
           </div>
 
-          {/* Language, Style, Length */}
+          {/* Mood (multi-select, searchable) */}
+          <ChipSelector
+            icon={<Smile className="w-4 h-4 text-violet-400" />}
+            title="Mood"
+            hint="Search moods…"
+            options={MOOD_OPTIONS}
+            selected={moods}
+            onToggle={toggleMood}
+            onClear={() => setMoods([])}
+            activeClass="bg-violet-500/20 border-violet-500/40 text-violet-400"
+            hoverClass="hover:border-violet-500/20"
+          />
+
+          {/* Writing Style (single, searchable) */}
+          <ChipSelector
+            icon={<PenTool className="w-4 h-4 text-secondary" />}
+            title="Writing Style"
+            hint="Search styles…"
+            options={STYLE_OPTIONS}
+            selected={writingStyle ? [writingStyle] : []}
+            onToggle={selectStyle}
+            activeClass="bg-secondary/20 border-secondary/40 text-secondary"
+            hoverClass="hover:border-secondary/20"
+          />
+
+          {/* Language (single, searchable) */}
+          <ChipSelector
+            icon={<Languages className="w-4 h-4 text-emerald-400" />}
+            title="Language"
+            hint="Search languages…"
+            options={LANGUAGE_OPTIONS}
+            selected={language ? [language] : []}
+            onToggle={selectLanguage}
+            activeClass="bg-emerald-500/20 border-emerald-500/40 text-emerald-400"
+            hoverClass="hover:border-emerald-500/20"
+          />
+
+          {/* Output Settings — dialogue length */}
           <div className="rounded-2xl border border-border bg-surface overflow-hidden">
             <div className="px-5 py-3.5 border-b border-border">
               <h3 className="text-sm font-bold text-text-primary">Output Settings</h3>
             </div>
             <div className="p-4 space-y-4">
-
-              <div>
-                <p className="text-xs text-text-muted font-medium mb-2">Language</p>
-                <div className="flex flex-wrap gap-2">
-                  {LANGUAGE_OPTIONS.map((l) => (
-                    <button key={l} type="button" onClick={() => setLanguage(l)}
-                      className={cn(
-                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                        language === l
-                          ? "bg-accent/20 border border-accent/40 text-accent"
-                          : "bg-surface-2 border border-border text-text-muted hover:border-accent/20"
-                      )}
-                    >{l}</button>
-                  ))}
-                </div>
-              </div>
-
-              <div>
-                <p className="text-xs text-text-muted font-medium mb-2">Writing Style</p>
-                <PillGroup options={STYLE_OPTIONS} value={style} onChange={setStyle} accent="secondary" />
-              </div>
 
               <div>
                 <p className="text-xs text-text-muted font-medium mb-2">Dialogue Length</p>
@@ -704,7 +823,7 @@ export default function DialoguePage() {
                     <div>
                       <p className="text-base font-semibold text-text-primary mb-1">Your dialogue will appear here</p>
                       <p className="text-sm text-text-muted max-w-xs leading-relaxed">
-                        Configure your characters, scene, and mood on the left — then hit{" "}
+                        Configure your characters, scene, tone &amp; mood on the left — then hit{" "}
                         <span className="text-accent font-medium">Generate Dialogue</span>
                       </p>
                     </div>
@@ -732,9 +851,9 @@ export default function DialoguePage() {
                       <p className="text-sm text-text-secondary italic leading-relaxed">&ldquo;{scene}&rdquo;</p>
                       {subtext && <p className="text-xs text-text-muted italic mt-1 opacity-75">Subtext: {subtext}</p>}
                       <div className="flex flex-wrap items-center gap-2 mt-2">
-                        <Badge variant="default">{mood}</Badge>
-                        <Badge variant="secondary">{language}</Badge>
-                        <Badge variant="outline">{style}</Badge>
+                        {moods.map((m) => <Badge key={`mood-${m}`} variant="warning">{m}</Badge>)}
+                        {writingStyle && <Badge variant="default">{writingStyle}</Badge>}
+                        {language && <Badge variant="secondary">{language}</Badge>}
                         <Badge variant="outline">{length.charAt(0).toUpperCase() + length.slice(1)}</Badge>
                       </div>
                     </div>

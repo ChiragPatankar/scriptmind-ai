@@ -6,9 +6,9 @@ export const POST = withCredits("dialogue", async (req: NextRequest) => {
   try {
     const body = (await req.json()) as Partial<DialogueInput>;
 
-    if (!body.scene || !body.mood || !body.language || !body.style) {
+    if (!body.scene) {
       return NextResponse.json(
-        { error: "scene, mood, language, and style are required." },
+        { error: "scene is required." },
         { status: 400 }
       );
     }
@@ -17,9 +17,9 @@ export const POST = withCredits("dialogue", async (req: NextRequest) => {
       characters:        Array.isArray(body.characters) ? body.characters : [],
       characterProfiles: Array.isArray(body.characterProfiles) ? body.characterProfiles : undefined,
       scene:             body.scene,
-      mood:              body.mood,
-      language:          body.language,
-      style:             body.style,
+      moods:             Array.isArray(body.moods) ? body.moods : [],
+      writingStyle:      typeof body.writingStyle === "string" ? body.writingStyle : "",
+      language:          typeof body.language === "string" && body.language ? body.language : "Hinglish",
       subtext:           typeof body.subtext === "string" ? body.subtext : undefined,
       dialogueLength:    body.dialogueLength as "short" | "medium" | "long" | undefined,
     });

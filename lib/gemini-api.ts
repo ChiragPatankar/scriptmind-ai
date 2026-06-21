@@ -19,7 +19,10 @@ export interface StoryInput {
   title: string;
   premise: string;
   genre: string;
-  tone: string;
+  themes: string[];
+  tones: string[];
+  moods: string[];
+  targetAudience: string[];
   setting: string;
 }
 
@@ -54,12 +57,28 @@ export interface DialogueInput {
   characters: string[];
   characterProfiles?: CharacterProfile[];
   scene: string;
-  mood: string;
-  language: string;
-  style: string;
+  moods: string[];          // emotional layers of the scene (multi-select)
+  writingStyle: string;     // single dominant writing style
+  language: string;         // single target language (strictly respected)
   subtext?: string;         // underlying tension / hidden motivation
   dialogueLength?: "short" | "medium" | "long"; // 4-5 / 8-10 / 12-15 lines
 }
+
+/** Per-language guidance — the chosen language is strictly enforced in output. */
+const LANGUAGE_GUIDES: Record<string, string> = {
+  Hindi:     "Write the dialogue entirely in Hindi (Devanagari or Roman transliteration is acceptable).",
+  English:   "Write the dialogue entirely in English.",
+  Hinglish:  "Write a natural Hindi-English conversational mix as spoken in urban India (Hinglish).",
+  Tamil:     "Write the dialogue entirely in Tamil (Roman transliteration is acceptable).",
+  Telugu:    "Write the dialogue entirely in Telugu (Roman transliteration is acceptable).",
+  Marathi:   "Write the dialogue entirely in Marathi (Roman transliteration is acceptable).",
+  Bengali:   "Write the dialogue entirely in Bengali (Roman transliteration is acceptable).",
+  Kannada:   "Write the dialogue entirely in Kannada (Roman transliteration is acceptable).",
+  Malayalam: "Write the dialogue entirely in Malayalam (Roman transliteration is acceptable).",
+  Punjabi:   "Write the dialogue entirely in Punjabi (Roman transliteration is acceptable).",
+  Gujarati:  "Write the dialogue entirely in Gujarati (Roman transliteration is acceptable).",
+  Urdu:      "Write the dialogue entirely in Urdu (Roman transliteration is acceptable).",
+};
 
 export interface GeneratedDialogueLine {
   character: string;
@@ -232,15 +251,34 @@ function repairTruncatedJson(raw: string): unknown | null {
 // ─── Story Outline ────────────────────────────────────────────────────────────
 
 export async function generateStoryOutline(input: StoryInput): Promise<StoryOutline> {
+  const themeLine    = input.themes.length ? input.themes.join(", ") : "Director's choice";
+  const toneLine     = input.tones.length ? input.tones.join(", ") : "Director's choice";
+  const moodLine     = input.moods.length ? input.moods.join(", ") : "Director's choice";
+  const audienceLine = input.targetAudience.length ? input.targetAudience.join(", ") : "General audience";
+
+  const directionLines: string[] = [];
+  if (input.themes.length)
+    directionLines.push(`- Let the selected THEMES (${themeLine}) drive plot development, character motivations, conflict design, the emotional arc, and how the story ends.`);
+  if (input.tones.length)
+    directionLines.push(`- Let the selected TONE(S) (${toneLine}) shape pacing, emotional flow, dialogue style, narrative structure, and the ending tone; blend multiple tones coherently.`);
+  if (input.targetAudience.length)
+    directionLines.push(`- Tailor language complexity, pacing, emotional depth, commercial positioning, and story structure to the TARGET AUDIENCE (${audienceLine}).`);
+  const directionBlock = directionLines.length
+    ? `\nCREATIVE DIRECTION:\n${directionLines.join("\n")}\n`
+    : "";
+
   const prompt = `You are a professional cinematic screenwriter.
 
 Generate a concise story outline based on the details below:
 - Title: ${input.title || "Untitled"}
 - Premise: ${input.premise || "A compelling story."}
 - Genre: ${input.genre}
-- Tone: ${input.tone}
+- Themes: ${themeLine}
+- Tone: ${toneLine}
+- Mood: ${moodLine}
+- Target Audience: ${audienceLine}
 - Setting: ${input.setting}
-
+${directionBlock}
 IMPORTANT — keep all strings SHORT and CONCISE (max 25 words per scene, max 40 words per arc).
 CRITICAL — never use double-quote characters (") inside any string value. Use single quotes (') if quoting is needed within text.
 
@@ -293,15 +331,8 @@ export async function generateDialogue(
     input.characters.length > 0 ? input.characters.join(", ") : "CHARACTER A, CHARACTER B";
 
   const languageGuide =
-    input.language === "Hindi"
-      ? "Write entirely in Hindi (Roman transliteration is acceptable)."
-      : input.language === "English"
-      ? "Write entirely in English."
-      : input.language === "Tamil"
-      ? "Write in Tamil (Roman transliteration is acceptable)."
-      : input.language === "Telugu"
-      ? "Write in Telugu (Roman transliteration is acceptable)."
-      : "Mix Hindi and English naturally as spoken in urban India (Hinglish).";
+    LANGUAGE_GUIDES[input.language] ??
+    `Write the dialogue entirely in ${input.language}.`;
 
   const lineRange =
     input.dialogueLength === "short"  ? "4 to 5"  :
@@ -329,15 +360,18 @@ export async function generateDialogue(
     ? `- Subtext / underlying tension: ${input.subtext}`
     : "";
 
+  const moodLine  = input.moods.length ? input.moods.join(", ") : "Director's choice";
+  const styleLine = input.writingStyle?.trim() ? input.writingStyle : "Director's choice";
+
   const prompt = `You are a professional cinematic dialogue writer with expertise in Indian film, OTT, and international screenwriting.
 
 Write a compelling, authentic film dialogue for the following scene. Each character must speak in a distinctly different voice that reflects their personality, emotional state, and speech pattern.
 
 ${characterSection}
 - Scene: ${input.scene}
-- Mood: ${input.mood}
+- Mood(s): ${moodLine}
+- Writing Style: ${styleLine}
 - Language: ${input.language} — ${languageGuide}
-- Writing Style: ${input.style}
 ${subtextLine}
 
 Rules:
@@ -345,7 +379,9 @@ Rules:
 - If a speech pattern is specified, honour it strictly
 - Emotional states should be reflected in the subtext and delivery, not stated explicitly
 - Include meaningful stage directions only when they add cinematic value
-- Language must feel natural and era-appropriate — avoid clichés
+- The MOOD(S) (${moodLine}) must drive emotional delivery, pacing, word choice, scene tension, and dialogue realism — blend multiple moods as emotional layers within the scene
+- The WRITING STYLE (${styleLine}) must shape sentence structure, dialogue rhythm, realism level, and cinematic quality (e.g. Natural/Realistic = grounded, understated; Cinematic = heightened, vivid; Commercial = punchy, crowd-pleasing; Poetic = lyrical; Action-Packed = terse, kinetic; Classical = formal, measured; Satirical = wry, pointed)
+- LANGUAGE IS STRICT: ${languageGuide} Use slang, idioms, cultural references, and conversational patterns authentic to that language and its speakers. Do not switch languages unless the language is Hinglish.
 
 Return ONLY a valid JSON array (no markdown fences, no extra text) with ${lineRange} dialogue exchanges:
 [
@@ -384,8 +420,20 @@ export interface FullScript {
 
 export async function expandToFullScript(
   outline: StoryOutline,
-  meta: { genre: string; tone: string; setting: string; language?: string }
+  meta: {
+    genre: string;
+    themes?: string[];
+    tones: string[];
+    moods?: string[];
+    targetAudience?: string[];
+    setting: string;
+    language?: string;
+  }
 ): Promise<FullScript> {
+  const themeLine    = meta.themes?.length ? meta.themes.join(", ") : "Director's choice";
+  const toneLine     = meta.tones.length ? meta.tones.join(", ") : "Director's choice";
+  const moodLine     = meta.moods?.length ? meta.moods.join(", ") : "Director's choice";
+  const audienceLine = meta.targetAudience?.length ? meta.targetAudience.join(", ") : "General audience";
   const actSummary = outline.acts
     .map((a) => `${a.label}: ${a.scenes.join(" | ")}`)
     .join("\n");
@@ -407,7 +455,7 @@ Using the story outline below, write a COMPLETE feature-length screenplay excerp
 STORY OUTLINE:
 Title: ${outline.title}
 Logline: ${outline.logline}
-Genre: ${meta.genre} | Tone: ${meta.tone} | Setting: ${meta.setting}
+Genre: ${meta.genre} | Themes: ${themeLine} | Tone: ${toneLine} | Mood: ${moodLine} | Target Audience: ${audienceLine} | Setting: ${meta.setting}
 
 ACTS:
 ${actSummary}
