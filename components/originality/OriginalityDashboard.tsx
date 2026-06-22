@@ -13,6 +13,7 @@ import {
   Info,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { EnhancementPanel } from "@/components/originality/EnhancementPanel";
 import type {
   OriginalityReport,
   TropeItem,
@@ -199,9 +200,11 @@ function PatternsSection({ patterns }: { patterns: PatternItem[] }) {
 
 export function OriginalityDashboard({
   report,
+  sourceFile,
   onAnalyseAnother,
 }: {
   report: OriginalityReport;
+  sourceFile: File | null;
   onAnalyseAnother: () => void;
 }) {
   return (
@@ -298,6 +301,9 @@ export function OriginalityDashboard({
           empty="No standout selling elements identified yet."
         />
       </div>
+
+      {/* Enhancement Actions */}
+      <EnhancementPanel sourceFile={sourceFile} scriptTitle={report.scriptTitle} />
     </div>
   );
 }

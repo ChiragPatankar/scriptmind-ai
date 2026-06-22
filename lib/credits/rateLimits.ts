@@ -18,4 +18,5 @@ export const DAILY_LIMITS: Record<Feature, number | null> = {
   poster_generate:     null,
   poster_regenerate:   null,
   originality:         null,
+  originality_enhance: null,
 };

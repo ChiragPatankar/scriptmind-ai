@@ -133,7 +133,105 @@ export function analyzeOriginalityText(
   text: string,
   title = "pasted-script"
 ): Promise<OriginalityReport> {
-  const blob = new Blob([text], { type: "text/plain" });
-  const file = new File([blob], `${title}.txt`, { type: "text/plain" });
+  const file = textToFile(text, title);
   return postFile(file);
+}
+
+/** Wrap pasted screenplay text in a .txt File (so enhancements can re-send it). */
+export function textToFile(text: string, title = "pasted-script"): File {
+  const blob = new Blob([text], { type: "text/plain" });
+  return new File([blob], `${title}.txt`, { type: "text/plain" });
+}
+
+// ── Enhancement Actions ───────────────────────────────────────────────────────
+
+export type EnhancementAction =
+  | "improve_dialogue"
+  | "emotional_depth"
+  | "character_voices"
+  | "reduce_predictability"
+  | "narrative_flow";
+
+export interface EnhancementActionMeta {
+  action: EnhancementAction;
+  label: string;
+  description: string;
+}
+
+/** UI metadata for the five enhancement actions (order = display order). */
+export const ENHANCEMENT_ACTIONS: EnhancementActionMeta[] = [
+  {
+    action: "improve_dialogue",
+    label: "Improve Dialogue Authenticity",
+    description: "Make lines sound natural, layered with subtext, and true to real speech.",
+  },
+  {
+    action: "emotional_depth",
+    label: "Increase Emotional Depth",
+    description: "Raise emotional stakes and add meaningful beats the audience connects with.",
+  },
+  {
+    action: "character_voices",
+    label: "Strengthen Character Voices",
+    description: "Give each character a distinct, consistent voice so none sound alike.",
+  },
+  {
+    action: "reduce_predictability",
+    label: "Reduce Predictability",
+    description: "Subvert obvious beats and replace clichés with fresher, original turns.",
+  },
+  {
+    action: "narrative_flow",
+    label: "Improve Narrative Flow",
+    description: "Smooth transitions, tighten pacing, and sharpen cause-and-effect.",
+  },
+];
+
+export interface EnhancementResult {
+  action: EnhancementAction;
+  actionLabel: string;
+  enhancedScript: string;
+  changes: string[];
+  focusNotes: string[];
+}
+
+function mapEnhancementResponse(raw: RawReport): EnhancementResult {
+  return {
+    action: String(raw.action ?? "") as EnhancementAction,
+    actionLabel: String(raw.action_label ?? "").trim(),
+    enhancedScript: String(raw.enhanced_script ?? "").trim(),
+    changes: strArr(raw.changes),
+    focusNotes: strArr(raw.focus_notes),
+  };
+}
+
+/**
+ * Apply a single enhancement action to the source script.
+ * Routes through /api/originality/enhance so auth + enhancement credits are
+ * enforced server-side.
+ */
+export async function enhanceOriginalityScript(
+  action: EnhancementAction,
+  file: File
+): Promise<EnhancementResult> {
+  const form = new FormData();
+  form.append("file", file, file.name);
+  form.append("action", action);
+
+  const res = await fetch("/api/originality/enhance", { method: "POST", body: form });
+  const payload = (await res.json().catch(() => ({}))) as {
+    detail?: string | { msg?: string }[];
+    message?: string;
+    error?: string;
+  };
+
+  if (!res.ok) {
+    let message = payload.message ?? payload.error ?? res.statusText ?? "Request failed";
+    if (typeof payload.detail === "string") message = payload.detail;
+    else if (Array.isArray(payload.detail))
+      message = payload.detail.map((d) => d.msg ?? "").filter(Boolean).join("; ") || message;
+    throw new Error(message || `Enhancement failed (${res.status})`);
+  }
+
+  return mapEnhancementResponse(payload as RawReport);
 }
