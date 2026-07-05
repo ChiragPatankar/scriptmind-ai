@@ -57,7 +57,7 @@ export default function LockedOverlay({ locked, children }: LockedOverlayProps) 
 
           {/* Secondary link */}
           <Link
-            href="/pricing"
+            href="/settings?tab=billing"
             className="text-xs text-text-muted hover:text-accent underline underline-offset-2 transition-colors"
           >
             Compare plans

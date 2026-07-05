@@ -10,6 +10,7 @@ import { createRouteSupabase } from "@/lib/supabase-route";
 import { NextRequest, NextResponse } from "next/server";
 
 const PLAN_CONFIG: Record<string, { amount: number; label: string }> = {
+  free:  { amount: 49 * 100,   label: "ScriptMind Trial Pack"  },
   basic: { amount: 499 * 100,  label: "ScriptMind Basic" },
   pro:   { amount: 1299 * 100, label: "ScriptMind Pro"   },
 };
@@ -31,7 +32,7 @@ export async function POST(req: NextRequest) {
 
   if (!config) {
     return NextResponse.json(
-      { error: "Invalid plan. Must be 'basic' or 'pro'." },
+      { error: "Invalid plan. Must be 'free', 'basic' or 'pro'." },
       { status: 400 }
     );
   }

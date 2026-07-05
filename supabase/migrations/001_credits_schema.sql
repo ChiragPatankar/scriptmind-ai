@@ -77,7 +77,7 @@ CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER LANGUAGE plpgsql SECURITY DEFINER AS $$
 BEGIN
   INSERT INTO public.users (id, email, credits, plan)
-  VALUES (NEW.id, NEW.email, 20, 'free')
+  VALUES (NEW.id, NEW.email, 0, 'free')
   ON CONFLICT (id) DO NOTHING;
   RETURN NEW;
 END;
@@ -161,6 +161,6 @@ $$;
 -- 7. BACKFILL: provision rows for existing auth users
 -- ─────────────────────────────────────────
 INSERT INTO public.users (id, email, credits, plan)
-SELECT id, email, 20, 'free'
+SELECT id, email, 0, 'free'
 FROM   auth.users
 ON CONFLICT (id) DO NOTHING;

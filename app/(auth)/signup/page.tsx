@@ -13,7 +13,7 @@ import { Input } from "@/components/ui/input";
 import { createClient } from "@/lib/supabase-browser";
 
 const perks = [
-  "Free forever plan",
+  "Trial Pack plan (₹49)",
   "AI script analysis & insights",
   "Multi-language dialogue generator",
   "Box office & OTT projections",
@@ -245,7 +245,7 @@ export default function SignupPage() {
           className="w-full"
           leftIcon={<UserPlus className="w-4 h-4" />}
         >
-          Create Free Account
+          Create Account
         </Button>
       </form>
 

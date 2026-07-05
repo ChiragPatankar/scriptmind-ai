@@ -108,7 +108,7 @@ export default function GenerateButton({ payload, className }: GenerateButtonPro
 
         <p className="text-xs text-text-muted text-center">
           5 credits per report · unlimited generations ·{" "}
-          <Link href="/pricing" className="text-accent underline underline-offset-2 hover:text-accent/80">
+          <Link href="/settings?tab=billing" className="text-accent underline underline-offset-2 hover:text-accent/80">
             Compare plans
           </Link>
         </p>

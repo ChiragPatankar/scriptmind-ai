@@ -60,10 +60,10 @@ export default function CreditsDisplay({ className }: CreditsDisplayProps) {
   return (
     <Link
       href="/settings?tab=billing"
-      title={`${credits} credits remaining — ${plan ?? "free"} plan. Click to upgrade.`}
+      title={`${credits} credits remaining — ${plan === "free" ? "Trial Pack" : (plan ?? "Trial Pack")} plan. Click to upgrade.`}
       className={cn(
         "flex items-center gap-1.5 px-2.5 h-9 rounded-lg border transition-all duration-200",
-        "hover:brightness-110 select-none",
+        "hover:scale-[1.02] hover:shadow-[0_0_12px_rgba(124,58,237,0.15)]",
         pillColor,
         className
       )}
@@ -84,7 +84,7 @@ export default function CreditsDisplay({ className }: CreditsDisplayProps) {
       <span className="hidden sm:flex items-center gap-1">
         <span className="opacity-40 text-xs">·</span>
         <span className="text-[10px] font-semibold uppercase tracking-wide opacity-70">
-          {plan ?? "free"}
+          {plan === "free" ? "Trial Pack" : (plan ?? "Trial Pack")}
         </span>
       </span>
 

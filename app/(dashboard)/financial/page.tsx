@@ -19,6 +19,8 @@ import { CreditBadge } from "@/components/ui/CreditBadge";
 import { ROIGauge } from "@/components/dashboard/ROIGauge";
 import { ProjectionPanel } from "@/components/dashboard/ProjectionPanel";
 import GenerateButton from "@/components/finance/GenerateButton";
+import LockedOverlay from "@/components/finance/LockedOverlay";
+import { useCredits } from "@/hooks/useCredits";
 import {
   type PhaseKey,
   type SplitKey,
@@ -439,6 +441,9 @@ function parseTerritoryCsv(text: string): { rows: TerritoryEntry[]; errors: stri
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function FinancialPage() {
+  const { plan } = useCredits();
+  const isLocked = plan === "free";
+
   const {
     budgetMatrix,
     breakEvenMode,
@@ -1304,6 +1309,9 @@ export default function FinancialPage() {
         )}
       </motion.div>
 
+      <LockedOverlay locked={isLocked}>
+        <div className="space-y-8">
+
       {/* ══════════════════════════════════════════════════════════════════ */}
       {/* 2. PROJECTION ENGINE                                              */}
       {/* ══════════════════════════════════════════════════════════════════ */}
@@ -2067,6 +2075,8 @@ export default function FinancialPage() {
           />
         </div>
       </SCard>
+        </div>
+      </LockedOverlay>
 
         </div>
       )}

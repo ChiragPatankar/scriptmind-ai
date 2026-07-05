@@ -69,6 +69,25 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(dashboardUrl);
   }
 
+  // Authenticated user hitting a protected route → verify plan activation
+  if (isProtected && user) {
+    const { data: userProfile } = await supabase
+      .from("users")
+      .select("plan_expires_at")
+      .eq("id", user.id)
+      .single();
+
+    const planExpiresAt = userProfile?.plan_expires_at ?? null;
+    const isExpired = planExpiresAt ? new Date() > new Date(planExpiresAt) : true;
+
+    if (isExpired) {
+      const onboardingUrl = request.nextUrl.clone();
+      onboardingUrl.pathname = "/onboarding";
+      onboardingUrl.search = "";
+      return NextResponse.redirect(onboardingUrl);
+    }
+  }
+
   // Prevent browsers from caching HTML pages — ensures chunk references are
   // always fresh after a new Cloudflare deployment (avoids 404 chunk errors).
   const isStaticAsset =

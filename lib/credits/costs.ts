@@ -4,7 +4,7 @@
  * The frontend must never know individual costs; it only reads remaining balance.
  */
 
-// 1 credit = ₹2  |  Basic ₹499 → 250 credits  |  Pro ₹1299 → 700 credits
+// 1 credit = ₹2  |  Free ₹49 → 20 credits  |  Basic ₹499 → 250 credits  |  Pro ₹1299 → 700 credits
 export const FEATURE_COSTS = {
   script_analysis:     3,
   scene_analysis:      15,

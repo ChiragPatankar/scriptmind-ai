@@ -31,11 +31,11 @@ export async function GET(request: NextRequest) {
       if (user) {
         const { data: userRow } = await supabase
           .from("users")
-          .select("plan")
+          .select("plan, plan_expires_at")
           .eq("id", user.id)
           .maybeSingle();
 
-        const isNewUser = !userRow || searchParams.get("new") === "1";
+        const isNewUser = !userRow || !userRow.plan_expires_at || searchParams.get("new") === "1";
         if (isNewUser && redirectPath === "/projects") {
           redirectPath = "/onboarding";
         }

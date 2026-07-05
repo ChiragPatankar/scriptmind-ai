@@ -13,6 +13,7 @@ import { createRouteSupabase } from "@/lib/supabase-route";
 import { createAdminClient }   from "@/lib/supabase-admin";
 
 const PLAN_CREDITS: Record<string, { credits: number }> = {
+  free:  { credits: 20 },
   basic: { credits: 250 },
   pro:   { credits: 700 },
 };

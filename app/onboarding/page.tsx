@@ -21,14 +21,14 @@ import { cn } from "@/lib/utils";
 const PLANS = [
   {
     id:       "free" as const,
-    name:     "Free",
-    price:    "₹0",
+    name:     "Trial Pack",
+    price:    "₹49",
     period:   "forever",
     credits:  "20 credits",
     color:    "#6B7280",
     icon:     Zap,
     features: ["Script analysis (2 cr)", "AI Dialogue (1 cr)", "Story generation (2 cr)", "Scene visualizer (3 cr)"],
-    cta:      "Start for Free",
+    cta:      "Get Trial Pack",
   },
   {
     id:       "basic" as const,
@@ -38,8 +38,9 @@ const PLANS = [
     credits:  "250 credits/mo",
     color:    "#0EA5E9",
     icon:     Zap,
-    features: ["Everything in Free", "250 credits / month", "Finance Studio (1 trial)", "Full script insights"],
+    features: ["Everything in Trial Pack", "250 credits / month", "Finance Studio (1 trial)", "Full script insights"],
     cta:      "Get Basic",
+    popular:  false,
   },
   {
     id:       "pro" as const,
@@ -64,22 +65,39 @@ export default function OnboardingPage() {
   const [error, setError]         = useState<string | null>(null);
   const [authChecked, setChecked] = useState(false);
 
-  // Redirect unauthenticated users to signup
+  // Redirect unauthenticated users to signup, and redirect authenticated users with an active plan to projects
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (!user) router.replace("/signup");
-      else setChecked(true);
+    let cancelled = false;
+    supabase.auth.getUser().then(async ({ data: { user } }) => {
+      if (cancelled) return;
+      if (!user) {
+        router.replace("/signup");
+      } else {
+        const { data: userProfile } = await supabase
+          .from("users")
+          .select("plan_expires_at")
+          .eq("id", user.id)
+          .maybeSingle();
+
+        if (cancelled) return;
+        const planExpiresAt = userProfile?.plan_expires_at ?? null;
+        const isExpired = planExpiresAt ? new Date() > new Date(planExpiresAt) : true;
+
+        if (!isExpired) {
+          router.replace("/projects");
+        } else {
+          setChecked(true);
+        }
+      }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [supabase, router]);
 
   const handleSelect = async (planId: "free" | "basic" | "pro") => {
     setSelected(planId);
     setError(null);
-
-    if (planId === "free") {
-      router.push("/projects?welcome=1");
-      return;
-    }
 
     await pay(planId, {
       onSuccess: (_plan, _credits) => {

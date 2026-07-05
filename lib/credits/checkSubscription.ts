@@ -32,9 +32,9 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
     plan_expires_at: string | null;
   };
 
-  // Free plan never expires
-  if (!plan_expires_at || plan === "free") {
-    return { active: true, plan, expiresAt: plan_expires_at };
+  // If plan_expires_at is null, they have no active plan (either new user or expired)
+  if (!plan_expires_at) {
+    return { active: false, code: "SUBSCRIPTION_EXPIRED", plan: "free" };
   }
 
   const now      = new Date();
@@ -45,7 +45,7 @@ export async function checkSubscription(userId: string): Promise<SubscriptionSta
     return { active: true, plan, expiresAt: plan_expires_at };
   }
 
-  // ── Expired: atomically downgrade to free ────────────────────────────────────
+  // ── Expired: atomically downgrade to free
   await admin
     .from("users")
     .update({ plan: "free", plan_expires_at: null })

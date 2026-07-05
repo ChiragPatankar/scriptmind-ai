@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   User, Bell, CreditCard, Shield, Palette, Key,
@@ -124,7 +125,7 @@ function Section({ title, desc, children }: { title: string; desc?: string; chil
 // ── Plan meta ─────────────────────────────────────────────────────────────────
 
 const PLAN_META: Record<string, { label: string; color: string; icon: React.ElementType; credits: string }> = {
-  free:  { label: "Free",  color: "#6B7280", icon: Star,  credits: "20 credits" },
+  free:  { label: "Trial Pack",  color: "#6B7280", icon: Star,  credits: "20 credits" },
   basic: { label: "Basic", color: "#0EA5E9", icon: Zap,   credits: "250 credits/mo" },
   pro:   { label: "Pro",   color: "#A78BFA", icon: Crown, credits: "700 credits/mo" },
 };
@@ -140,13 +141,21 @@ const TABS = [
 
 // ── Page ──────────────────────────────────────────────────────────────────────
 
-export default function SettingsPage() {
+function SettingsContent() {
   const supabase        = createClient();
   const { pay, paying } = useRazorpay();
   const { credits, plan: currentPlan, planExpiresAt, isExpired } = useCredits();
   const { theme, setTheme } = useTheme();
+  const searchParams    = useSearchParams();
+  const tabParam        = searchParams.get("tab");
 
   const [activeTab, setActiveTab] = useState("profile");
+
+  useEffect(() => {
+    if (tabParam && ["profile", "billing", "notifications", "security", "appearance", "api"].includes(tabParam)) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam]);
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Auth + profile
@@ -169,7 +178,7 @@ export default function SettingsPage() {
   // Payment
   const [payError,   setPayError]   = useState<string | null>(null);
   const [paySuccess, setPaySuccess] = useState<string | null>(null);
-  const [payingPlan, setPayingPlan] = useState<"basic" | "pro" | null>(null);
+  const [payingPlan, setPayingPlan] = useState<"free" | "basic" | "pro" | null>(null);
 
   // Security
   const [pwForm,       setPwForm]       = useState({ next: "", confirm: "" });
@@ -313,7 +322,7 @@ export default function SettingsPage() {
   }
 
   // ── Payment ───────────────────────────────────────────────────────────────
-  const handlePayment = async (plan: "basic" | "pro") => {
+  const handlePayment = async (plan: "free" | "basic" | "pro") => {
     setPayError(null); setPaySuccess(null); setPayingPlan(plan);
     await pay(plan, {
       onSuccess: (_p, c) => setPaySuccess(`You're now on ${plan.charAt(0).toUpperCase() + plan.slice(1)} with ${c} credits!`),
@@ -599,7 +608,7 @@ export default function SettingsPage() {
                 <Section title="Available Plans" desc="All paid plans include a 30-day subscription period.">
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {[
-                      { name: "Free",  planId: null,           price: "₹0",     period: "/mo", color: "#6B7280", icon: Star,
+                      { name: "Trial Pack",  planId: "free" as const,           price: "₹49",     period: "/mo", color: "#6B7280", icon: Star,
                         features: ["20 credits total", "Script analysis · 2cr", "AI Dialogue · 1cr", "Story Creator · 2cr", "Scene Visualizer · 3cr"] },
                       { name: "Basic", planId: "basic" as const, price: "₹499",   period: "/mo", color: "#0EA5E9", icon: Zap,
                         features: ["250 credits / month", "All AI tools", "Finance Studio (1 trial)", "Priority support"] },
@@ -607,7 +616,7 @@ export default function SettingsPage() {
                         features: ["700 credits / month", "Full Finance Studio", "Unlimited reports", "Projection insights", "Everything in Basic"] },
                     ].map((p) => {
                       const PIcon  = p.icon;
-                      const active = planKey === p.name.toLowerCase();
+                      const active = planKey === p.planId;
                       return (
                         <div
                           key={p.name}
@@ -641,7 +650,7 @@ export default function SettingsPage() {
                             disabled={paying || active || p.planId === null}
                             onClick={() => p.planId && handlePayment(p.planId)}
                           >
-                            {active ? "Current Plan" : p.planId === null ? "Free Plan" : `Get ${p.name}`}
+                            {active ? "Current Plan" : p.planId === null ? "Trial Pack" : `Get ${p.name}`}
                           </Button>
                         </div>
                       );
@@ -847,6 +856,7 @@ export default function SettingsPage() {
                       { label: "AI Dialogue",       limit: "Unlimited",   note: "Within credits" },
                       { label: "Scene Visualizer",  limit: "Unlimited",   note: "Within credits" },
                       { label: "Finance Reports",   limit: planKey === "free" ? "1 trial" : "Unlimited", note: planKey === "free" ? "Free plan" : "Paid plan" },
+                      { label: "Maximum Projects",  limit: planKey === "free" ? "3 projects" : planKey === "basic" ? "10 projects" : "30 projects", note: "Active limits" },
                     ].map((r) => (
                       <div key={r.label} className="flex items-center justify-between py-3 first:pt-0 last:pb-0">
                         <p className="text-sm text-text-secondary">{r.label}</p>
@@ -865,5 +875,17 @@ export default function SettingsPage() {
         </div>
       </div>
     </>
+  );
+}
+
+export default function SettingsPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="w-6 h-6 text-accent animate-spin" />
+      </div>
+    }>
+      <SettingsContent />
+    </Suspense>
   );
 }

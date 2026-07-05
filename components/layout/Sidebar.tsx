@@ -240,7 +240,7 @@ export default function Sidebar() {
                 Unlock unlimited scripts &amp; AI features
               </p>
               <Link
-                href="/pricing"
+                href="/settings?tab=billing"
                 className="block text-center text-xs font-semibold py-2 rounded-lg bg-gradient-accent text-white hover:shadow-glow-sm transition-shadow duration-200"
               >
                 View Plans

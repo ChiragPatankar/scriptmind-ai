@@ -37,7 +37,7 @@ function loadScript(src: string): Promise<boolean> {
 export function useRazorpay() {
   const [paying, setPaying] = useState(false);
 
-  const pay = useCallback(async (plan: "basic" | "pro", opts: PayOptions = {}) => {
+  const pay = useCallback(async (plan: "free" | "basic" | "pro", opts: PayOptions = {}) => {
     setPaying(true);
 
     try {

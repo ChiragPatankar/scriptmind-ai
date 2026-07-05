@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { ScriptMindLogoMark } from "@/components/brand/ScriptMindLogoMark";
 
 const benefits = [
-  "Free forever plan available",
+  "Trial Pack available (₹49)",
   "No credit card required",
   "AI dialogue & story tools",
   "Finance Studio built-in",
@@ -68,7 +68,7 @@ export default function CTASection() {
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
                 }
               >
-                Get Started Free
+                Get Started Now
               </Button>
             </Link>
             <Link href="/pricing">

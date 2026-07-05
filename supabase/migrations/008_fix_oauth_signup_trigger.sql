@@ -24,7 +24,7 @@ BEGIN
       NULLIF(TRIM(NEW.raw_user_meta_data->>'email'), ''),
       NEW.id::text || '@users.scriptmind.ai'
     ),
-    20,
+    0,
     'free'
   )
   ON CONFLICT (id) DO NOTHING;

@@ -410,7 +410,13 @@ export async function getTopBollywoodMovies(count = 20): Promise<TMDBMovie[]> {
     console.info("[Movies] No API key — using Wikipedia poster list.");
   }
 
-  return STATIC_BOLLYWOOD_MOVIES.slice(0, count);
+  return STATIC_BOLLYWOOD_MOVIES.slice(0, count).map(m => {
+    if (m.title === "3 Idiots") return m;
+    return {
+      ...m,
+      poster_path: `https://picsum.photos/seed/${m.title.toLowerCase().replace(/[^a-z0-9]/g, "")}/300/450`
+    };
+  });
 }
 
 export async function getMovieDetail(_id: number): Promise<TMDBMovieDetail | null> {

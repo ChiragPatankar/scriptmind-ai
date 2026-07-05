@@ -65,7 +65,7 @@ export default function RootLayout({
               "if(typeof __name==='undefined'){__name=function(t){return t}}",
           }}
         />
-        {/* Intercept fetch globally to detect X-Credits-Remaining header and fire credits-changed event */}
+        {/* Intercept fetch globally to detect X-Credits-Remaining header and fire credits-changed/insufficient-credits events */}
         <script
           dangerouslySetInnerHTML={{
             __html: `(function(){
@@ -74,6 +74,7 @@ export default function RootLayout({
     return _fetch.apply(this, arguments).then(function(res) {
       var h = res.headers.get('x-credits-remaining');
       if (h !== null) window.dispatchEvent(new CustomEvent('credits-changed', { detail: { remaining: parseInt(h, 10) } }));
+      if (res.status === 402) window.dispatchEvent(new CustomEvent('insufficient-credits'));
       return res;
     });
   };

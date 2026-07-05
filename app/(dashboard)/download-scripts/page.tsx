@@ -149,7 +149,8 @@ export default function UsageDashboardPage() {
     );
   }
 
-  const planLabel = (data?.plan ?? "free").charAt(0).toUpperCase() + (data?.plan ?? "free").slice(1);
+  const rawPlan   = data?.plan ?? "free";
+  const planLabel = rawPlan === "free" ? "Trial Pack" : rawPlan.charAt(0).toUpperCase() + rawPlan.slice(1);
   const isExpired = data?.plan_expires_at && new Date() > new Date(data.plan_expires_at);
 
   return (

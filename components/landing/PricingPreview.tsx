@@ -8,11 +8,12 @@ import PlanCTAButton from "@/components/PlanCTAButton";
 
 const tiers = [
   {
-    name: "Free",
+    id: "free",
+    name: "Trial Pack",
     topBadge: "Start Here",
     topBadgeFeatured: false,
     discountBadge: null,
-    price: "₹0",
+    price: "₹49",
     originalPrice: null,
     period: "forever",
     isCustom: false,
@@ -33,10 +34,11 @@ const tiers = [
     ],
     locked: "Finance Studio",
     featured: false,
-    cta: "Start for Free",
+    cta: "Get Trial Pack",
     ctaHref: "/signup",
   },
   {
+    id: "basic",
     name: "Basic",
     topBadge: null,
     topBadgeFeatured: false,
@@ -67,6 +69,7 @@ const tiers = [
     ctaHref: "/signup",
   },
   {
+    id: "pro",
     name: "Pro",
     topBadge: "🔥 Most Popular",
     topBadgeFeatured: true,
@@ -98,6 +101,7 @@ const tiers = [
     ctaHref: "/signup",
   },
   {
+    id: "enterprise",
     name: "Enterprise",
     topBadge: null,
     topBadgeFeatured: false,
@@ -314,7 +318,7 @@ export default function PricingPreview() {
 
                 {/* CTA */}
                 <PlanCTAButton
-                  plan={tier.name.toLowerCase() as "free" | "basic" | "pro" | "enterprise"}
+                  plan={tier.id as "free" | "basic" | "pro" | "enterprise"}
                   label={tier.cta}
                   featured={tier.featured}
                   accent={tier.accent}

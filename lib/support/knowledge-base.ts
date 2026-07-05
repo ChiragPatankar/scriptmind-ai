@@ -85,7 +85,7 @@ Documentary, Web Series. Stored in-browser (localStorage); changes are per-devic
 /pricing, /about, /privacy, /terms, /refunds, /cookies, /dmca — public pages
 
 ## 3. PLANS & PRICING (INR)
-  • Free — ₹0 / month — 20 credits
+  • Free — ₹49 / month — 20 credits
   • Basic — ₹499 / month — 250 credits
   • Pro — ₹1,299 / month — 700 credits + Finance Studio Pro features
   • Enterprise — custom credits and pricing; route to support@scriptmindai.in

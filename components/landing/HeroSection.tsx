@@ -10,7 +10,6 @@ import {
     Sparkles,
     TrendingUp,
 } from "lucide-react";
-import Image from "next/image";
 import Link from "next/link";
 import { useMemo, useRef } from "react";
 import SearchBar from "./SearchBar";
@@ -246,14 +245,14 @@ export default function HeroSection({ movies = [] }: HeroSectionProps) {
                       boxShadow: "0 8px 32px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05)",
                     }}
                   >
-                    <Image
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
                       src={movie.posterUrl}
                       alt={movie.title}
-                      fill
-                      sizes="160px"
-                      className="object-cover"
+                      className="w-full h-full object-cover"
                       style={{ opacity: 0.22 + (rowIdx % 2) * 0.06 }}
-                      priority={rowIdx === 0 && i < 4}
+                      loading="lazy"
+                      referrerPolicy="no-referrer"
                     />
                     {/* Blue tint overlay to align with brand */}
                     <div className="absolute inset-0" style={{ background: `linear-gradient(135deg, ${BLUE}1A 0%, ${NAVY}80 100%)` }} />

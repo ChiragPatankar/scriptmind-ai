@@ -45,14 +45,14 @@ type Plan = {
 const plans: Plan[] = [
   {
     id: "free",
-    name: "Free",
+    name: "Trial Pack",
     topBadge: "Start Here",
     topBadgeStyle: "bg-surface-2 text-text-muted border border-border/60",
     discountBadge: null,
     isCustom: false,
-    monthlyPrice: 0,
+    monthlyPrice: 49,
     originalMonthlyPrice: null,
-    yearlyPrice: 0,
+    yearlyPrice: 49,
     originalYearlyPrice: null,
     period: "forever",
     description: "Taste the AI. Get hooked.",
@@ -75,7 +75,7 @@ const plans: Plan[] = [
       { text: "Character analysis", included: false },
       { text: "Finance Studio", locked: true },
     ],
-    cta: "Start for Free",
+    cta: "Get Trial Pack",
     ctaHref: "/signup",
   },
   {
@@ -399,7 +399,7 @@ export default function PricingPage() {
                         </span>
                         <span className="text-sm text-text-muted">{plan.period}</span>
                       </div>
-                      {yearly && currentPrice > 0 && (
+                      {yearly && currentPrice > 0 && plan.id !== "free" && (
                         <p className="text-xs mt-0.5" style={{ color: plan.accentColor }}>
                           Billed ₹{currentPrice * 12}/year
                         </p>
@@ -536,7 +536,7 @@ export default function PricingPage() {
                     Feature
                   </th>
                   {[
-                    { name: "Free",       price: "₹0 · 20 cr",      color: "#6B7280" },
+                    { name: "Trial Pack", price: "₹49 · 20 cr",      color: "#6B7280" },
                     { name: "Basic",      price: "₹499 · 250 cr",   color: "#0EA5E9" },
                     { name: "Pro",        price: "₹1,299 · 700 cr", color: "#7C3AED" },
                     { name: "Enterprise", price: "Custom",           color: "#F59E0B" },
@@ -593,7 +593,7 @@ export default function PricingPage() {
             href="/signup"
             className="inline-flex items-center gap-2 text-sm font-semibold text-[#a78bfa] hover:text-[#7C3AED] transition-colors group"
           >
-            Start free — no credit card required
+            Get started with the Trial Pack (₹49) — no credit card required
             <ArrowRight className="w-4 h-4 transition-transform group-hover:translate-x-1" />
           </Link>
         </motion.div>

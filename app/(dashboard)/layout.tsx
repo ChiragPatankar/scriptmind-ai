@@ -4,6 +4,7 @@ import React from "react";
 import Sidebar from "@/components/layout/Sidebar";
 import DashboardNavbar from "@/components/layout/DashboardNavbar";
 import SubscriptionExpiredBanner from "@/components/SubscriptionExpiredBanner";
+import CreditsLimitModal from "@/components/CreditsLimitModal";
 import { useUIStore } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ export default function DashboardLayout({
     <div className="min-h-screen bg-background overflow-x-hidden w-full">
       <Sidebar />
       <DashboardNavbar />
+      <CreditsLimitModal />
       <div
         className={cn(
           "fixed top-16 left-0 right-0 z-40 transition-all duration-300",

@@ -18,8 +18,15 @@ import {
 import { formatDate } from "@/lib/utils";
 import { Project } from "@/lib/types";
 import { useProjectStore } from "@/lib/store";
+import { useCredits } from "@/hooks/useCredits";
 
 // ── Config ────────────────────────────────────────────────────────────────────
+
+const PLAN_LIMITS = {
+  free: 3,
+  basic: 10,
+  pro: 30,
+} as const;
 
 const TYPE_CONFIG = {
   story:      { icon: BookOpen,     color: "#F59E0B", bg: "rgba(245,158,11,0.12)",  label: "Story",      border: "rgba(245,158,11,0.25)" },
@@ -576,6 +583,9 @@ function ProjectRow({ project, onEdit, onDelete, onDuplicate, onStatusChange }: 
 export default function ProjectsPage() {
   const { projects, addProject, updateProject, removeProject, duplicateProject } = useProjectStore();
   const { toasts, show: showToast } = useToast();
+  const { plan } = useCredits();
+  const currentPlan = plan ?? "free";
+  const limit = PLAN_LIMITS[currentPlan as keyof typeof PLAN_LIMITS] ?? 3;
 
   // Local UI state
   const [search,        setSearch]        = useState("");
@@ -631,6 +641,10 @@ export default function ProjectsPage() {
 
   // Handlers
   const handleCreate = (data: ProjectFormData) => {
+    if (projects.length >= limit) {
+      showToast("error", `Project limit reached. Please upgrade to create more projects.`);
+      return;
+    }
     const now = new Date().toISOString();
     const project: Project = {
       id: `proj-${Date.now()}`,
@@ -672,6 +686,10 @@ export default function ProjectsPage() {
   };
 
   const handleDuplicate = (project: Project) => {
+    if (projects.length >= limit) {
+      showToast("error", `Project limit reached. Please upgrade to duplicate projects.`);
+      return;
+    }
     duplicateProject(project.id);
     showToast("success", `"${project.name}" duplicated`);
   };
@@ -683,10 +701,10 @@ export default function ProjectsPage() {
 
   const statCards = [
     {
-      label: "Total Projects", value: stats.total,
+      label: "Total Projects", value: `${stats.total} / ${limit}`,
       color: "#5BA8E5",  icon: FolderOpen,
       bg: "rgba(29,119,197,0.12)", border: "rgba(29,119,197,0.22)",
-      glow: "rgba(29,119,197,0.08)", sub: "all time",
+      glow: "rgba(29,119,197,0.08)", sub: `limit: ${limit} projects`,
     },
     {
       label: "In Progress",    value: stats.inProgress,
@@ -724,7 +742,13 @@ export default function ProjectsPage() {
         </div>
         <Button
           leftIcon={<Plus className="w-4 h-4" />}
-          onClick={() => setCreateOpen(true)}
+          onClick={() => {
+            if (projects.length >= limit) {
+              showToast("error", `Project limit reached. You can create up to ${limit} projects on the ${currentPlan === "free" ? "Trial Pack" : currentPlan} plan. Please upgrade to create more.`);
+            } else {
+              setCreateOpen(true);
+            }
+          }}
         >
           New Project
         </Button>
@@ -893,7 +917,16 @@ export default function ProjectsPage() {
             {search ? `No results for "${search}"` : "Create your first project to get started on your filmmaking journey."}
           </p>
           {!search && typeFilter === "all" && (
-            <Button leftIcon={<Plus className="w-4 h-4" />} onClick={() => setCreateOpen(true)}>
+            <Button
+              leftIcon={<Plus className="w-4 h-4" />}
+              onClick={() => {
+                if (projects.length >= limit) {
+                  showToast("error", `Project limit reached. You can create up to ${limit} projects on the ${currentPlan === "free" ? "Trial Pack" : currentPlan} plan. Please upgrade to create more.`);
+                } else {
+                  setCreateOpen(true);
+                }
+              }}
+            >
               Create First Project
             </Button>
           )}

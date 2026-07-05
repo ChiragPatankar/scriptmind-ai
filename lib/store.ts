@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
 import { User, Project, Script } from "./types";
+import { createClient } from "./supabase-browser";
 
 // ─── UI Store ───────────────────────────────────────────────────────────────
 
@@ -117,9 +118,11 @@ export const useScriptStore = create<ScriptState>()((set) => ({
 interface ProjectState {
   projects: Project[];
   activeProject: Project | null;
+  userId: string | null;
 
   setProjects:      (projects: Project[]) => void;
   setActiveProject: (project: Project | null) => void;
+  setUserId:        (userId: string | null) => void;
   addProject:       (project: Project) => void;
   updateProject:    (id: string, updates: Partial<Project>) => void;
   removeProject:    (id: string) => void;
@@ -131,43 +134,218 @@ export const useProjectStore = create<ProjectState>()(
     (set, get) => ({
       projects: [],
       activeProject: null,
+      userId: null,
 
       setProjects:      (projects) => set({ projects }),
       setActiveProject: (project) => set({ activeProject: project }),
+      setUserId:        (userId) => set({ userId }),
 
-      addProject: (project) =>
-        set((state) => ({ projects: [project, ...state.projects] })),
+      addProject: (project) => {
+        set((state) => ({ projects: [project, ...state.projects] }));
 
-      updateProject: (id, updates) =>
+        const userId = get().userId;
+        if (userId && userId !== "anonymous") {
+          const supabase = createClient();
+          supabase.from("projects").insert({
+            id: project.id,
+            user_id: userId,
+            name: project.name,
+            description: project.description,
+            type: project.type,
+            status: project.status,
+            genre: project.genre,
+            tags: project.tags,
+            word_count: project.wordCount,
+            target_word_count: project.targetWordCount,
+            script_id: project.scriptId,
+            budget: project.budget,
+            notes: project.notes,
+            created_at: project.createdAt,
+            updated_at: project.updatedAt,
+          }).then(({ error }) => {
+            if (error) {
+              console.error("[useProjectStore] Failed to insert project to Supabase:", error.message, error.details, error.hint);
+            } else {
+              console.log("[useProjectStore] Successfully synced project creation to Supabase.");
+            }
+          });
+        }
+      },
+
+      updateProject: (id, updates) => {
+        const now = new Date().toISOString();
         set((state) => ({
           projects: state.projects.map((p) =>
-            p.id === id ? { ...p, ...updates, updatedAt: new Date().toISOString() } : p
+            p.id === id ? { ...p, ...updates, updatedAt: now } : p
           ),
-        })),
+          activeProject: state.activeProject?.id === id
+            ? { ...state.activeProject, ...updates, updatedAt: now }
+            : state.activeProject,
+        }));
 
-      removeProject: (id) =>
+        const userId = get().userId;
+        if (userId && userId !== "anonymous") {
+          const supabase = createClient();
+          supabase.from("projects").update({
+            name: updates.name,
+            description: updates.description,
+            type: updates.type,
+            status: updates.status,
+            genre: updates.genre,
+            tags: updates.tags,
+            word_count: updates.wordCount,
+            target_word_count: updates.targetWordCount,
+            script_id: updates.scriptId,
+            budget: updates.budget,
+            notes: updates.notes,
+            updated_at: now,
+          }).eq("id", id).then(({ error }) => {
+            if (error) {
+              console.error("[useProjectStore] Failed to update project in Supabase:", error.message, error.details, error.hint);
+            } else {
+              console.log("[useProjectStore] Successfully synced project update to Supabase.");
+            }
+          });
+        }
+      },
+
+      removeProject: (id) => {
         set((state) => ({
           projects: state.projects.filter((p) => p.id !== id),
           activeProject: state.activeProject?.id === id ? null : state.activeProject,
-        })),
+        }));
+
+        const userId = get().userId;
+        if (userId && userId !== "anonymous") {
+          const supabase = createClient();
+          supabase.from("projects").delete().eq("id", id).then(({ error }) => {
+            if (error) {
+              console.error("[useProjectStore] Failed to delete project from Supabase:", error.message, error.details, error.hint);
+            } else {
+              console.log("[useProjectStore] Successfully synced project deletion to Supabase.");
+            }
+          });
+        }
+      },
 
       duplicateProject: (id) => {
         const original = get().projects.find((p) => p.id === id);
         if (!original) return;
+        const now = new Date().toISOString();
         const copy: Project = {
           ...original,
           id: `proj-${Date.now()}`,
           name: `${original.name} (Copy)`,
           status: "draft",
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
         };
         set((state) => ({ projects: [copy, ...state.projects] }));
+
+        const userId = get().userId;
+        if (userId && userId !== "anonymous") {
+          const supabase = createClient();
+          supabase.from("projects").insert({
+            id: copy.id,
+            user_id: userId,
+            name: copy.name,
+            description: copy.description,
+            type: copy.type,
+            status: copy.status,
+            genre: copy.genre,
+            tags: copy.tags,
+            word_count: copy.wordCount,
+            target_word_count: copy.targetWordCount,
+            script_id: copy.scriptId,
+            budget: copy.budget,
+            notes: copy.notes,
+            created_at: copy.createdAt,
+            updated_at: copy.updatedAt,
+          }).then(({ error }) => {
+            if (error) {
+              console.error("[useProjectStore] Failed to duplicate project in Supabase:", error.message, error.details, error.hint);
+            } else {
+              console.log("[useProjectStore] Successfully synced duplicated project to Supabase.");
+            }
+          });
+        }
       },
     }),
     {
-      name: "scriptmind-projects",
+      name: "scriptmind-projects:anonymous",
       storage: createJSONStorage(() => localStorage),
     }
   )
 );
+
+// Dynamic user session storage isolation
+if (typeof window !== "undefined") {
+  const supabase = createClient();
+
+  const syncProjectsUser = async (userId: string) => {
+    const name = `scriptmind-projects:${userId}`;
+    
+    // Explicitly reset the in-memory store state to prevent cross-user leakage
+    useProjectStore.setState({
+      projects: [],
+      activeProject: null,
+      userId: userId,
+    });
+
+    useProjectStore.persist.setOptions({ name });
+    useProjectStore.persist.rehydrate();
+
+    // If authenticated user, sync from Supabase database table
+    if (userId !== "anonymous") {
+      try {
+        const { data, error } = await supabase
+          .from("projects")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (error) {
+          console.error("[useProjectStore] error syncing from Supabase:", error);
+          return;
+        }
+
+        if (data) {
+          const dbProjects: Project[] = (data as Array<Record<string, unknown>>).map((p) => ({
+            id: p.id as string,
+            name: p.name as string,
+            description: p.description as string,
+            type: p.type as Project["type"],
+            status: p.status as Project["status"],
+            genre: (p.genre as string) || undefined,
+            tags: (p.tags as string[]) || [],
+            createdAt: p.created_at as string,
+            updatedAt: p.updated_at as string,
+            wordCount: (p.word_count as number) || undefined,
+            targetWordCount: (p.target_word_count as number) || undefined,
+            scriptId: (p.script_id as string) || undefined,
+            budget: p.budget ? parseFloat(p.budget as string) : undefined,
+            notes: (p.notes as string) || undefined,
+          }));
+
+          useProjectStore.setState({
+            projects: dbProjects,
+            activeProject: dbProjects.length > 0 ? dbProjects[0] : null,
+          });
+        }
+      } catch (err) {
+        console.error("[useProjectStore] failed to fetch projects from Supabase:", err);
+      }
+    }
+  };
+
+  // Sync initial session
+  supabase.auth.getSession().then(({ data: { session } }) => {
+    const userId = session?.user?.id ?? "anonymous";
+    syncProjectsUser(userId);
+  });
+
+  // Listen for login/logout events
+  supabase.auth.onAuthStateChange((_event, session) => {
+    const userId = session?.user?.id ?? "anonymous";
+    syncProjectsUser(userId);
+  });
+}
