@@ -1,63 +1,49 @@
-# ScriptMind AI 🎬🤖
+# ScriptMind AI — Enterprise Screenplay Intelligence & Production Packaging SaaS
 
-ScriptMind AI is a state-of-the-art AI-powered scriptwriting companion, screenplay analysis suite, and financial projections platform for filmmakers and production houses.
-
-## 🚀 Key Features
-
-- **Script Analysis & Originality Intelligence**: Scene-by-scene breakdown, emotional distribution graphs, and originality checks powered by Google Gemini.
-- **Finance Studio Projections**: Interactive calculators for P&L, exhibitor/distributor shares, investor ROI models, and automated NPV/IRR report generator.
-- **Story & Dialogue Helpers**: Tone-gated script expansor, dialogue generators, and customized styling prompts.
-- **AI Poster Studio**: Automated movie poster generator and regeneration pipeline.
-- **Isolated Projects System**: Dynamic Supabase-backed user project management and sync.
-- **Razorpay Payment Gateway**: Seamless onboarding flow with active plan validation (Trial Pack, Basic, Pro).
+ScriptMind AI is an advanced, enterprise-grade software-as-a-service (SaaS) platform built for screenwriters, independent producers, and creative studio executives. The platform blends artificial intelligence with institutional financial models to analyze screenplays, generate key packaging art, and forecast theatrical distribution ROI.
 
 ---
 
-## 🛠️ Technology Stack
+## 💎 Product Architecture & Key Modules
 
-- **Frontend**: [Next.js 14](https://nextjs.org/) (App Router), Tailwind CSS, Framer Motion, Recharts, Zustand.
-- **Serverless / Hosting**: Cloudflare Pages / Workers via OpenNext.
-- **Database & Authentication**: Supabase (PostgreSQL, RLS Policies, Database Triggers).
-- **Payment Gateway**: Razorpay (PASE directly integrated via fetch, Cloudflare-compatible).
+ScriptMind AI operates as a unified web-native workspace split into five core business modules:
 
----
+### 1. Creative Companion Studio
+*   **Tone-Gated Expansion Engine**: Allows writers to select a target tone (e.g., Suspenseful, Comedic, Melodramatic) and dynamically generate or extend narrative beats.
+*   **Multi-Mood Dialogue Generator**: Automatically shapes script dialogues based on selected moods (e.g., Sarcastic, Intense, Warm) to optimize character voice.
+*   **Styling Prompts Manager**: Standardizes scene headers, action descriptions, and transitions to industry-standard screenplay formatting.
 
-## 💻 Getting Started
+### 2. Screenplay Intelligence & Analytics
+*   **Scene-by-Scene Breakdown**: Instantly indexes scenes, identifying active locations, characters present, subtext, and pacing.
+*   **Emotional Distribution Analysis**: Visualizes emotional arcs and character dynamics across scenes using interactive graphs.
+*   **Originality Audit & Enhancement**: Scans text for narrative clichés and AI-like patterns, providing automated structural suggestions to improve storytelling style.
 
-### 1. Clone the repository
-```bash
-git clone https://github.com/ChiragPatankar/scriptmind-ai.git
-cd scriptmind-ai
-```
+### 3. AI Poster Packaging Studio
+*   **Key Art Generation**: Uses advanced generative models to turn script synopses or theme prompts into premium-quality vertical movie posters.
+*   **Visual Art Variations**: Instantly regenerates layout designs and color schemes to align with target theatrical genre aesthetics.
 
-### 2. Configure Environment Variables
-Create a `.env.local` file in the root directory:
-```env
-NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-OMDB_API_KEY=your-omdb-api-key
-RAZORPAY_KEY_ID=your-razorpay-key-id
-RAZORPAY_KEY_SECRET=your-razorpay-key-secret
-```
+### 4. Finance Studio Projections
+*   **Projection Engine**: Calculates complex theatrical profit-and-loss margins based on seating, pricing, and theater locations.
+*   **Theatrical Split Analytics**: Evaluates exhibitor shares, distributor fees, and prints & advertising (P&A) costs.
+*   **Multi-Tier Investor ROI Model**: Analyzes recoupment schedules, Net Present Value (NPV), and Internal Rate of Return (IRR) across different budgets.
 
-### 3. Setup Database Schema
-Execute the SQL files inside `supabase/migrations/` in order on your **Supabase Dashboard → SQL Editor**. 
-
-*(Make sure to run `011_projects_schema.sql` to enable the user-wise isolated project database synchronization).*
-
-### 4. Run Development Server
-```bash
-npm install
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 5. Multi-Tenant Isolated Infrastructure
+*   **User-wise Storage Vaults**: Dynamically namespaces state persistence (`scriptmind-projects:${userId}`) and replicates project metadata directly to an isolated database schema, preventing cross-tenant leakage.
+*   **Resource Rate Limits**: Enforces hard usage boundaries based on subscription tiers:
+    *   *Trial Pack*: 3 Projects maximum, basic feature access.
+    *   *Basic*: 10 Projects maximum, standard analytics quota.
+    *   *Pro*: 30 Projects maximum, full access to Finance Studio models.
+*   **Secure Payment Integration**: Direct Razorpay integration with HMAC-SHA256 signature verification server-side, securing tier upgrades and credit transactions.
 
 ---
 
-## 📦 Cloudflare Deployment
+## ⚡ Infrastructure & Technology Stack
 
-Build and deploy to Cloudflare Pages using:
-```bash
-npm run deploy
-```
-*(Ensure you map your environment variables under the `[vars]` block in `wrangler.toml` for production runtime accessibility).*
+ScriptMind AI is engineered for global scale, high security, and sub-100ms response times:
+
+*   **Front-End Engine**: **Next.js 14** (App Router architecture) for server-side pre-rendering and component optimization.
+*   **Styling & Motion**: Custom **Tailwind CSS** system combined with **Framer Motion** for premium animations, hover micro-effects, and visual cues.
+*   **Database & RLS**: **Supabase PostgreSQL** utilizing Row Level Security (RLS) to enforce data privacy, backed by triggers that automatically update schema timestamps.
+*   **State Management**: **Zustand** store with custom middleware to sync in-memory local state reactively with cloud databases on session changes.
+*   **Serverless Deployment**: Bundled via **OpenNext** and deployed directly to **Cloudflare Workers / Pages** to run server-side logic at the edge.
+*   **Payment Gateway**: Pure HTTP-based Razorpay integration optimized for Cloudflare's serverless V8 isolate constraints (no Node.js internals required).
